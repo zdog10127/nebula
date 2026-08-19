@@ -1,0 +1,214 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  /* Surface hierarchy: cool near-black slate, own identity (not Discord grey/blurple) */
+  --color-canvas: #07080b;
+  --color-panel: #0d0f15;
+  --color-panel-hover: #171a23;
+  --color-raised: #1a1e29;
+
+  --color-border: #262b36;
+  --color-border-strong: #3a4152;
+
+  --color-foreground: #f5f7fb;
+  --color-muted-foreground: #9aa2b2;
+
+  /* Brand accent: electric cyan, distinct from Discord blurple / Slack aubergine */
+  --color-accent: #22d3ee;
+  --color-accent-hover: #67e8f9;
+  --color-accent-active: #06b6d4;
+  --color-accent-soft: rgba(34, 211, 238, 0.14);
+  --color-accent-border: rgba(34, 211, 238, 0.4);
+
+  --color-online: #23a55a;
+  --color-away: #f0b232;
+  --color-dnd: #f23f42;
+  --color-offline: #6b7280;
+
+  --shadow-elevated: 0 20px 40px -12px rgb(0 0 0 / 0.55), 0 4px 10px -4px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 10px 24px -6px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.35);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #root {
+    height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-muted-foreground);
+    background: var(--color-canvas);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--color-foreground);
+    margin: 0;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  code {
+    font-family: var(--font-mono);
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+    color: var(--color-foreground);
+  }
+
+  /* Slim, unobtrusive scrollbars matching the dark palette */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted-foreground);
+  }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.6rem;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 150ms ease;
+    white-space: nowrap;
+  }
+
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-accent);
+    color: var(--color-canvas);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+  }
+
+  .btn-secondary {
+    background: var(--color-raised);
+    color: var(--color-foreground);
+    border: 1px solid var(--color-border-strong);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-panel-hover);
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--color-dnd);
+    border: 1px solid color-mix(in srgb, var(--color-dnd) 50%, transparent);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-dnd) 12%, transparent);
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 0.55rem;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+    transition: all 150ms ease;
+    flex-shrink: 0;
+  }
+
+  .icon-btn:hover {
+    background: var(--color-panel-hover);
+    color: var(--color-foreground);
+  }
+
+  .field {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-raised);
+    color: var(--color-foreground);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .field:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+  }
+
+  .field::placeholder {
+    color: var(--color-muted-foreground);
+  }
+
+  .label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-muted-foreground);
+  }
+
+  .card {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-elevated);
+  }
+}
