@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -10,7 +10,11 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
-    "electron:build": "npm run build && electron-builder --win"
+    "electron:build": "npm run build && electron-builder --win",
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:linux": "npm run build && electron-builder --linux",
+    "electron:build:all": "npm run build && electron-builder -mwl",
+    "electron:publish": "npm run build && electron-builder --publish always"
   },
   "build": {
     "appId": "com.novacode.nebula",
@@ -18,6 +22,11 @@
     "files": ["dist/**/*", "electron/**/*", "build/icon.png", "package.json"],
     "directories": {
       "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "zdog10127",
+      "repo": "nebula"
     },
     "win": {
       "target": "nsis",
@@ -27,12 +36,34 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "build/icon.png",
+      "category": "public.app-category.social-networking",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "O Nébula precisa do microfone para chamadas de voz.",
+        "NSCameraUsageDescription": "O Nébula precisa da câmera para chamadas de vídeo.",
+        "NSScreenCaptureUsageDescription": "O Nébula precisa gravar a tela para compartilhamento de tela."
+      }
+    },
+    "dmg": {
+      "sign": false
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "build/icon.png",
+      "category": "Network",
+      "maintainer": "NovaCode"
     }
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",
     "@tailwindcss/vite": "^4.3.3",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.3.9",
     "framer-motion": "^13.1.0",
     "livekit-client": "^2.22.0",
     "lucide-react": "^1.33.0",

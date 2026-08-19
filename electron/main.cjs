@@ -1,12 +1,21 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell, session, desktopCapturer, ipcMain } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, session, desktopCapturer, ipcMain, dialog } = require('electron')
 const path = require('node:path')
 const http = require('node:http')
 const fs = require('node:fs')
 const { URL } = require('node:url')
+const { autoUpdater } = require('electron-updater')
 
 const isDev = !app.isPackaged
 const iconPath = path.join(__dirname, isDev ? 'tray-icon.png' : '../build/icon.png')
 const trayIconPath = path.join(__dirname, 'tray-icon.png')
+
+// Most current Linux desktops (GNOME/KDE on Wayland) run Chromium's screen
+// capture through PipeWire via xdg-desktop-portal instead of the old X11
+// APIs. Without this flag desktopCapturer.getSources() silently returns an
+// empty list on those sessions and screen share looks broken.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
+}
 
 // Fixed port so the app's origin is stable across launches — the backend's
 // CORS allowlist needs a known origin to match against, and a random port
@@ -148,6 +157,80 @@ async function createWindow() {
   })
 }
 
+// Auto-update via electron-updater, fed by GitHub Releases (see package.json's
+// "build.publish" and .github/workflows/release.yml). Disabled in dev — there
+// is no packaged app.yml/latest.yml to read the update feed from, and
+// autoUpdater throws immediately if it can't find one.
+let manualCheckInFlight = false
+
+function setupAutoUpdater() {
+  if (isDev) return
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('error', (err) => {
+    console.error('[autoUpdater]', err)
+    if (manualCheckInFlight) {
+      manualCheckInFlight = false
+      void dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'Nébula',
+        message: 'Não foi possível verificar atualizações.',
+        detail: err?.message ?? String(err),
+      })
+    }
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    if (manualCheckInFlight) {
+      manualCheckInFlight = false
+      void dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Nébula',
+        message: 'Você já está na versão mais recente.',
+      })
+    }
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    manualCheckInFlight = false
+    void dialog
+      .showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Nébula',
+        message: `Atualização ${info.version} baixada.`,
+        detail: 'Reinicie o app para aplicar a atualização.',
+        buttons: ['Reiniciar agora', 'Mais tarde'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          app.isQuitting = true
+          autoUpdater.quitAndInstall()
+        }
+      })
+  })
+
+  // Check on launch, then every 4h while the app stays open/minimized in the tray.
+  void autoUpdater.checkForUpdates()
+  setInterval(() => void autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000)
+}
+
+function checkForUpdatesManually() {
+  if (isDev) {
+    void dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Nébula',
+      message: 'Verificação de atualização não está disponível em modo de desenvolvimento.',
+    })
+    return
+  }
+  manualCheckInFlight = true
+  void autoUpdater.checkForUpdates()
+}
+
 function createTray() {
   const icon = nativeImage.createFromPath(trayIconPath)
   tray = new Tray(icon)
@@ -160,6 +243,11 @@ function createTray() {
           mainWindow?.show()
           mainWindow?.focus()
         },
+      },
+      { type: 'separator' },
+      {
+        label: 'Verificar atualizações',
+        click: () => checkForUpdatesManually(),
       },
       { type: 'separator' },
       {
@@ -185,6 +273,7 @@ app.whenReady().then(() => {
   setupScreenShareHandler()
   void createWindow()
   createTray()
+  setupAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow()
