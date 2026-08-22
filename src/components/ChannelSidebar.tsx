@@ -31,6 +31,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useChatHub } from '../hubs/ChatHubContext'
 import { hasPermission } from '../lib/permissions'
 import { useToast } from '../lib/ToastContext'
+import type { VoiceCallContextValue } from '../voice/VoiceCallContext'
 import { useVoiceCall } from '../voice/VoiceCallContext'
 import Avatar from './Avatar'
 import ConfirmModal from './ConfirmModal'
@@ -242,6 +243,8 @@ export default function ChannelSidebar({ server, refreshServer }: Props) {
               onMoveUp={() => void moveChannel(list, channel, -1)}
               onMoveDown={() => void moveChannel(list, channel, 1)}
               onVoiceClick={channel.type === 'Voice' ? () => void call.join(channel.id, channel.name) : undefined}
+              call={call}
+              ownUserId={user?.userId}
             />
           ))}
         </ChannelGroup>
@@ -261,6 +264,8 @@ export default function ChannelSidebar({ server, refreshServer }: Props) {
               onMoveUp={() => void moveChannel(list, channel, -1)}
               onMoveDown={() => void moveChannel(list, channel, 1)}
               onVoiceClick={channel.type === 'Voice' ? () => void call.join(channel.id, channel.name) : undefined}
+              call={call}
+              ownUserId={user?.userId}
             />
           ))}
         </ChannelGroup>
@@ -464,6 +469,8 @@ function ChannelRow({
   onMoveUp,
   onMoveDown,
   onVoiceClick,
+  call,
+  ownUserId,
 }: {
   channel: ChannelDto
   serverId: string
@@ -476,7 +483,10 @@ function ChannelRow({
   onMoveUp: () => void
   onMoveDown: () => void
   onVoiceClick?: () => void
+  call?: VoiceCallContextValue
+  ownUserId?: string
 }) {
+  const isInThisVoiceChannel = channel.type === 'Voice' && call?.channelId === channel.id
   return (
     <div className="group/row">
       <div className="flex items-center gap-0.5">
@@ -524,17 +534,43 @@ function ChannelRow({
               <span className="truncate">Music</span>
             </li>
           )}
-          {participants?.map((p) => (
-            <li key={p.userId} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Avatar url={p.avatarUrl} name={p.displayName} size={18} />
-              <span className="truncate">{p.displayName}</span>
-              {p.isDeafened ? (
-                <VolumeX size={11} className="shrink-0 text-dnd" />
-              ) : p.isMuted ? (
-                <MicOff size={11} className="shrink-0 text-dnd" />
-              ) : null}
-            </li>
-          ))}
+          {participants?.map((p) => {
+            const isSelf = p.userId === ownUserId
+            const showAudioControls = isInThisVoiceChannel && call && !isSelf
+            const isLocallyMuted = call?.locallyMutedIds.has(p.userId) ?? false
+            return (
+              <li key={p.userId} className="group/participant flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Avatar url={p.avatarUrl} name={p.displayName} size={18} />
+                <span className="min-w-0 flex-1 truncate">{p.displayName}</span>
+                {p.isDeafened ? (
+                  <VolumeX size={11} className="shrink-0 text-dnd" />
+                ) : p.isMuted ? (
+                  <MicOff size={11} className="shrink-0 text-dnd" />
+                ) : null}
+                {showAudioControls && (
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/participant:opacity-100">
+                    <input
+                      type="range"
+                      min={0}
+                      max={200}
+                      value={call.participantVolumes[p.userId] ?? 100}
+                      onChange={(e) => call.setParticipantVolume(p.userId, Number(e.target.value))}
+                      className="h-1 w-10 accent-accent"
+                      title={`Volume de ${p.displayName}`}
+                    />
+                    <button
+                      type="button"
+                      className={`icon-btn h-4 w-4 ${isLocallyMuted ? 'text-dnd' : ''}`}
+                      onClick={() => call.toggleParticipantMute(p.userId)}
+                      title={isLocallyMuted ? `Reativar áudio de ${p.displayName}` : `Silenciar ${p.displayName} (só para você)`}
+                    >
+                      {isLocallyMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
+                    </button>
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>
