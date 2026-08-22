@@ -1,0 +1,57 @@
+name: Build and Publish Desktop App
+
+# Fires on a version tag (created by `npm run release:patch` / `release:minor` / `release:major`,
+# which bumps package.json's version, commits, tags, and pushes in one go) or manually via
+# workflow_dispatch. Builds the real Windows installer on a Windows runner (NSIS + native
+# electron-builder, no cross-build/Wine involved) and uploads it straight to the same S3
+# `downloads/` folder the app's in-app updater (electron-updater, see electron/main.cjs) reads
+# from — no more dragging the .exe into the S3 console by hand.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-upload:
+    name: Build Windows installer and upload to S3
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app + Windows installer (dist/ + release/Nebula-Setup.exe + release/latest.yml)
+        run: npm run electron:build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload installer + update manifest to S3
+        shell: bash
+        run: |
+          aws s3 cp release/Nebula-Setup.exe "s3://${{ vars.S3_BUCKET_NAME }}/downloads/Nebula-Setup.exe"
+          aws s3 cp release/latest.yml "s3://${{ vars.S3_BUCKET_NAME }}/downloads/latest.yml"
+
+      - name: Invalidate CloudFront cache for downloads/
+        shell: bash
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/downloads/*"
