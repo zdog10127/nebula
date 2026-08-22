@@ -2,12 +2,18 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import type { ReactNode } from 'react'
 import { ApiError, apiGet, apiPost } from '../api/client'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens, subscribeToTokenChanges } from '../api/tokenStore'
-import type { AuthResult, UserProfile } from '../api/types'
+import type { AuthResult, LoginOutcome, UserProfile } from '../api/types'
+
+export interface LoginResult {
+  requiresTwoFactor: boolean
+  loginToken: string | null
+}
 
 interface AuthContextValue {
   user: UserProfile | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<LoginResult>
+  verifyTwoFactor: (loginToken: string, code: string) => Promise<void>
   register: (username: string, email: string, password: string, displayName?: string) => Promise<void>
   logout: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -62,8 +68,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [loadProfile])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await apiPost<AuthResult>('/api/auth/login', { email, password })
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+    const outcome = await apiPost<LoginOutcome>('/api/auth/login', { email, password })
+
+    if (outcome.requiresTwoFactor) {
+      // Password was correct, but this account has 2FA enabled — no tokens yet. The
+      // caller (LoginPage) shows a code-entry step and calls verifyTwoFactor next.
+      return { requiresTwoFactor: true, loginToken: outcome.loginToken }
+    }
+
+    if (outcome.result) {
+      setTokens(outcome.result.accessToken, outcome.result.refreshToken)
+      await loadProfile()
+    }
+
+    return { requiresTwoFactor: false, loginToken: null }
+  }, [loadProfile])
+
+  const verifyTwoFactor = useCallback(async (loginToken: string, code: string) => {
+    const result = await apiPost<AuthResult>('/api/auth/2fa/verify', { loginToken, code })
     setTokens(result.accessToken, result.refreshToken)
     await loadProfile()
   }, [loadProfile])
@@ -88,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshProfile: loadProfile }}>
+    <AuthContext.Provider value={{ user, isLoading, login, verifyTwoFactor, register, logout, refreshProfile: loadProfile }}>
       {children}
     </AuthContext.Provider>
   )

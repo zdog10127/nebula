@@ -11,6 +11,7 @@ import { THEME_PRESETS, useTheme } from '../lib/ThemeContext'
 import Avatar from './Avatar'
 import EmojiPicker from './EmojiPicker'
 import Modal from './Modal'
+import TwoFactorSettings from './TwoFactorSettings'
 
 const PRESET_INFO: Record<ThemePreset, { label: string; description: string; swatches: string[] }> = {
   nebula: { label: 'Nébula', description: 'Ciano no escuro, o visual clássico', swatches: ['#07080b', '#22d3ee'] },
@@ -311,6 +312,11 @@ export default function ProfileSettingsModal({ onClose }: { onClose: () => void 
               </p>
             </div>
           )}
+        </div>
+
+        <div className="mt-4">
+          <p className="text-sm font-medium text-foreground">Segurança</p>
+          <TwoFactorSettings />
         </div>
 
         {isPushSupported() && (

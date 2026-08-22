@@ -32,6 +32,22 @@ export interface UserProfile {
   pronouns: string | null
   customStatusText: string | null
   customStatusEmoji: string | null
+  totpEnabled: boolean
+}
+
+export interface LoginOutcome {
+  requiresTwoFactor: boolean
+  loginToken: string | null
+  result: AuthResult | null
+}
+
+export interface TwoFactorSetupResult {
+  secretBase32: string
+  otpAuthUri: string
+}
+
+export interface EnableTwoFactorResult {
+  recoveryCodes: string[]
 }
 
 export interface PublicProfileDto {

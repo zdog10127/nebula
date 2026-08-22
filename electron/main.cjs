@@ -133,6 +133,10 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Chromium's spellchecker loads a hunspell dictionary and runs its own background
+      // service per input field — real memory/CPU it doesn't need to spend for a chat app
+      // that isn't relying on the native red squiggly underline for anything.
+      spellcheck: false,
     },
   })
 

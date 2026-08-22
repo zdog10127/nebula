@@ -52,16 +52,34 @@ export default function RegisterPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
               minLength={3}
+              maxLength={32}
+              pattern="[a-zA-Z0-9_.-]+"
+              title="Só letras, números, '.', '_' ou '-'"
               autoFocus
             />
+            <span className="mt-1 block text-xs text-muted-foreground">
+              3-32 caracteres: letras, números, ponto, hífen ou underline.
+            </span>
           </label>
           <label className="label">
             Nome de exibição (opcional)
-            <input className="field" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            <input
+              className="field"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={64}
+            />
           </label>
           <label className="label">
             Email
-            <input type="email" className="field" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input
+              type="email"
+              className="field"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              maxLength={254}
+            />
           </label>
           <label className="label">
             Senha
@@ -72,7 +90,9 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
+              maxLength={72}
             />
+            <span className="mt-1 block text-xs text-muted-foreground">Mínimo de 8 caracteres.</span>
           </label>
         </div>
 
