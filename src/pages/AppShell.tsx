@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
+import GameActivityReporter from '../components/GameActivityReporter'
 import ServerSidebar from '../components/ServerSidebar'
 import { ChatHubProvider } from '../hubs/ChatHubContext'
 import { ensureNotificationPermission } from '../lib/notify'
@@ -18,6 +19,7 @@ export default function AppShell() {
   return (
     <ServersProvider>
       <ChatHubProvider>
+        <GameActivityReporter />
         <SocialProvider>
           {/* ProfileCardProvider must wrap VoiceCallProvider: VoiceCallProvider renders
               VoiceFullscreenOverlay (which uses useProfileCard) as a sibling of {children},

@@ -34,3 +34,11 @@ contextBridge.exposeInMainWorld('electronUpdater', {
   install: () => ipcRenderer.invoke('update-install'),
   check: () => ipcRenderer.invoke('update-check'),
 })
+
+// Bridges the main process's local game-process scan (see gameActivity.cjs) into the
+// renderer, which forwards it to the chat hub (see GameActivityReporter.tsx) — the
+// detection itself always runs, same as Discord; whether it actually gets sent to
+// anyone is gated in the renderer by the user's own "compartilhar jogo" setting.
+contextBridge.exposeInMainWorld('electronGameActivity', {
+  onChange: (callback) => onIpc('game-activity-changed', callback),
+})

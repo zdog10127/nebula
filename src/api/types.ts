@@ -33,6 +33,8 @@ export interface UserProfile {
   customStatusText: string | null
   customStatusEmoji: string | null
   totpEnabled: boolean
+  shareActivityStatus: boolean
+  steamLinked: boolean
 }
 
 export interface LoginOutcome {
@@ -50,6 +52,10 @@ export interface EnableTwoFactorResult {
   recoveryCodes: string[]
 }
 
+export interface SteamLinkStartResult {
+  redirectUrl: string
+}
+
 export interface PublicProfileDto {
   userId: string
   username: string
@@ -62,6 +68,7 @@ export interface PublicProfileDto {
   customStatusText: string | null
   customStatusEmoji: string | null
   createdAt: string
+  currentActivity: string | null
 }
 
 export interface ServerSummary {
@@ -120,6 +127,7 @@ export interface MemberDto {
   status: PresenceStatus
   customStatusText: string | null
   customStatusEmoji: string | null
+  currentActivity: string | null
 }
 
 export interface MyPermissionsDto {
@@ -242,6 +250,7 @@ export interface FriendDto {
   avatarUrl: string | null
   status: PresenceStatus
   friendsSince: string
+  currentActivity: string | null
 }
 
 export interface FriendRequestDto {
@@ -263,6 +272,7 @@ export interface DmChannelDto {
   otherStatus: PresenceStatus
   lastMessageContent: string | null
   lastMessageAt: string | null
+  otherCurrentActivity: string | null
 }
 
 export interface DmMessageDto {

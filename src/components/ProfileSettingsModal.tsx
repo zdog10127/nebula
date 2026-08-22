@@ -1,4 +1,4 @@
-import { Bell, BellOff, Check, ChevronDown, Code2, Palette, X } from 'lucide-react'
+import { Bell, BellOff, Check, ChevronDown, Code2, Gamepad2, Palette, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { HexColorPicker } from 'react-colorful'
@@ -11,6 +11,7 @@ import { THEME_PRESETS, useTheme } from '../lib/ThemeContext'
 import Avatar from './Avatar'
 import EmojiPicker from './EmojiPicker'
 import Modal from './Modal'
+import SteamSettings from './SteamSettings'
 import TwoFactorSettings from './TwoFactorSettings'
 
 const PRESET_INFO: Record<ThemePreset, { label: string; description: string; swatches: string[] }> = {
@@ -39,6 +40,7 @@ export default function ProfileSettingsModal({ onClose }: { onClose: () => void 
   const [isTogglingPush, setIsTogglingPush] = useState(false)
   const [showCustomAccent, setShowCustomAccent] = useState(false)
   const [showCustomCss, setShowCustomCss] = useState(false)
+  const [isTogglingActivity, setIsTogglingActivity] = useState(false)
 
   useEffect(() => {
     if (!isPushSupported()) return
@@ -82,6 +84,18 @@ export default function ProfileSettingsModal({ onClose }: { onClose: () => void 
       toast.error(err instanceof ApiError ? err.message : 'Falha ao salvar perfil.')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function toggleActivitySharing() {
+    setIsTogglingActivity(true)
+    try {
+      await apiPatch('/api/auth/me', { shareActivityStatus: !user?.shareActivityStatus })
+      await refreshProfile()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Falha ao atualizar a preferência.')
+    } finally {
+      setIsTogglingActivity(false)
     }
   }
 
@@ -318,6 +332,23 @@ export default function ProfileSettingsModal({ onClose }: { onClose: () => void 
           <p className="text-sm font-medium text-foreground">Segurança</p>
           <TwoFactorSettings />
         </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-raised p-3">
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <Gamepad2 size={16} className={user?.shareActivityStatus ? 'text-accent' : 'text-muted-foreground'} />
+            Mostrar o jogo que estou jogando pros outros, igual o Discord
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary shrink-0"
+            onClick={() => void toggleActivitySharing()}
+            disabled={isTogglingActivity}
+          >
+            {user?.shareActivityStatus ? 'Desativar' : 'Ativar'}
+          </button>
+        </div>
+
+        <SteamSettings />
 
         {isPushSupported() && (
           <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-raised p-3">

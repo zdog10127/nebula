@@ -1,4 +1,4 @@
-import { Check, MessageSquare, UserMinus, UserPlus, X } from 'lucide-react'
+import { Check, Gamepad2, MessageSquare, UserMinus, UserPlus, X } from 'lucide-react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -143,7 +143,14 @@ export default function FriendsPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-foreground">{f.displayName}</div>
-                    <div className="truncate text-xs text-muted-foreground">{STATUS_LABEL[f.status]}</div>
+                    {f.currentActivity ? (
+                      <div className="flex items-center gap-1 truncate text-xs text-accent">
+                        <Gamepad2 size={11} className="shrink-0" />
+                        <span className="truncate">Jogando {f.currentActivity}</span>
+                      </div>
+                    ) : (
+                      <div className="truncate text-xs text-muted-foreground">{STATUS_LABEL[f.status]}</div>
+                    )}
                   </div>
                   <button
                     type="button"

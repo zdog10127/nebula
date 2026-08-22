@@ -4,6 +4,7 @@ const http = require('node:http')
 const fs = require('node:fs')
 const { URL } = require('node:url')
 const { autoUpdater } = require('electron-updater')
+const { startGameActivityWatcher, stopGameActivityWatcher } = require('./gameActivity.cjs')
 
 const isDev = !app.isPackaged
 const iconPath = path.join(__dirname, isDev ? 'tray-icon.png' : '../build/icon.png')
@@ -280,6 +281,10 @@ app.whenReady().then(() => {
   void createWindow()
   createTray()
   setupAutoUpdater()
+  // Detection always runs locally (same as Discord's own client) — whether it's
+  // actually sent to the backend/other people is decided in the renderer, based on the
+  // user's own "compartilhar jogo" account setting (see GameActivityReporter.tsx).
+  startGameActivityWatcher((activity) => sendToRenderer('game-activity-changed', activity))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow()
@@ -289,6 +294,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   app.isQuitting = true
+  stopGameActivityWatcher()
 })
 
 app.on('window-all-closed', () => {

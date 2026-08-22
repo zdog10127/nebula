@@ -1,4 +1,4 @@
-import { LogOut, Settings, Users } from 'lucide-react'
+import { Gamepad2, LogOut, Settings, Users } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
@@ -54,7 +54,15 @@ export default function DmSidebar() {
                   className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-panel ${STATUS_DOT_CLASS[dm.otherStatus]}`}
                 />
               </span>
-              <span className="min-w-0 flex-1 truncate">{dm.otherDisplayName}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{dm.otherDisplayName}</span>
+                {dm.otherCurrentActivity && (
+                  <span className="flex items-center gap-1 truncate text-xs text-accent">
+                    <Gamepad2 size={10} className="shrink-0" />
+                    <span className="truncate">Jogando {dm.otherCurrentActivity}</span>
+                  </span>
+                )}
+              </span>
             </NavLink>
           ))}
           {dmChannels.length === 0 && (

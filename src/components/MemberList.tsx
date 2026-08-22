@@ -1,3 +1,4 @@
+import { Gamepad2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { apiGet } from '../api/client'
@@ -46,12 +47,17 @@ export default function MemberList({ serverId }: { serverId: string }) {
         prev.map((m) => (m.userId === userId ? { ...m, customStatusText: text, customStatusEmoji: emoji } : m)),
       )
     }
+    const onActivity = (userId: string, activity: string | null) => {
+      setMembers((prev) => prev.map((m) => (m.userId === userId ? { ...m, currentActivity: activity } : m)))
+    }
 
     connection.on('PresenceChanged', onPresence)
     connection.on('CustomStatusChanged', onCustomStatus)
+    connection.on('ActivityChanged', onActivity)
     return () => {
       connection.off('PresenceChanged', onPresence)
       connection.off('CustomStatusChanged', onCustomStatus)
+      connection.off('ActivityChanged', onActivity)
     }
   }, [connection])
 
@@ -165,6 +171,12 @@ function MemberRow({
             </span>
           ))}
         </div>
+        {member.currentActivity && (
+          <div className="flex items-center gap-1 truncate text-xs text-accent">
+            <Gamepad2 size={11} className="shrink-0" />
+            <span className="truncate">Jogando {member.currentActivity}</span>
+          </div>
+        )}
         {member.customStatusText && (
           <div className="truncate text-xs text-muted-foreground">
             {member.customStatusEmoji && <span className="mr-1">{member.customStatusEmoji}</span>}

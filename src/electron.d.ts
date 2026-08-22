@@ -28,5 +28,10 @@ declare global {
       install: () => Promise<void>
       check: () => Promise<void>
     }
+    electronGameActivity?: {
+      // null means "not playing anything we could detect". A non-null string is either
+      // a curated pretty name (e.g. "VALORANT") or the generic fallback ("um jogo").
+      onChange: (callback: (activity: string | null) => void) => () => void
+    }
   }
 }

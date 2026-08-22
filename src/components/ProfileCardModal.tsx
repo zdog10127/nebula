@@ -1,3 +1,4 @@
+import { Gamepad2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { apiGet } from '../api/client'
 import type { PublicProfileDto, RoleDto } from '../api/types'
@@ -66,6 +67,13 @@ export default function ProfileCardModal({ userId, memberContext, onClose }: Pro
               <p className="text-sm text-muted-foreground">@{profile.username}</p>
               {profile.pronouns && <p className="mt-0.5 text-xs text-muted-foreground">{profile.pronouns}</p>}
             </div>
+
+            {profile.currentActivity && (
+              <div className="mt-3 flex items-center gap-1.5 text-sm text-accent">
+                <Gamepad2 size={15} />
+                <span>Jogando {profile.currentActivity}</span>
+              </div>
+            )}
 
             {profile.customStatusText && (
               <div className="mt-3 flex items-center gap-1.5 text-sm text-foreground">
