@@ -1,5 +1,6 @@
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import ProtectedRoute from './auth/ProtectedRoute'
+import UpdateBanner from './components/UpdateBanner'
 import { isElectron } from './lib/platform'
 import { ToastProvider } from './lib/ToastContext'
 import ChannelView from './pages/ChannelView'
@@ -16,6 +17,7 @@ import WelcomePage from './pages/WelcomePage'
 export default function App() {
   return (
     <ToastProvider>
+      <UpdateBanner />
       <Router>
         <Routes>
           <Route path="/" element={isElectron() ? <Navigate to="/login" replace /> : <LandingPage />} />

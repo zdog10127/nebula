@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "nebula",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -29,9 +29,8 @@
       "output": "release"
     },
     "publish": {
-      "provider": "github",
-      "owner": "zdog10127",
-      "repo": "nebula"
+      "provider": "generic",
+      "url": "https://nebula-novacode.com/downloads/"
     },
     "win": {
       "target": "nsis",

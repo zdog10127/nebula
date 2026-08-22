@@ -14,3 +14,23 @@ contextBridge.exposeInMainWorld('electronScreenShare', {
   },
   choose: (sourceId) => ipcRenderer.send('screen-share-source-chosen', sourceId),
 })
+
+// Bridges the main process's electron-updater instance (see main.cjs) into the
+// renderer so the app can show its own "nova atualização disponível" UI
+// instead of native OS dialogs.
+function onIpc(channel, callback) {
+  const listener = (_event, payload) => callback(payload)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
+contextBridge.exposeInMainWorld('electronUpdater', {
+  onAvailable: (callback) => onIpc('update-available', callback),
+  onNotAvailable: (callback) => onIpc('update-not-available', callback),
+  onProgress: (callback) => onIpc('update-download-progress', callback),
+  onDownloaded: (callback) => onIpc('update-downloaded', callback),
+  onError: (callback) => onIpc('update-error', callback),
+  download: () => ipcRenderer.invoke('update-download'),
+  install: () => ipcRenderer.invoke('update-install'),
+  check: () => ipcRenderer.invoke('update-check'),
+})

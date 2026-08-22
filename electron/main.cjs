@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell, session, desktopCapturer, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, session, desktopCapturer, ipcMain } = require('electron')
 const path = require('node:path')
 const http = require('node:http')
 const fs = require('node:fs')
@@ -157,60 +157,57 @@ async function createWindow() {
   })
 }
 
-// Auto-update via electron-updater, fed by GitHub Releases (see package.json's
-// "build.publish" and .github/workflows/release.yml). Disabled in dev — there
-// is no packaged app.yml/latest.yml to read the update feed from, and
-// autoUpdater throws immediately if it can't find one.
+// Auto-update via electron-updater, fed by a "generic" feed (package.json's
+// "build.publish") pointing at the same S3/CloudFront `downloads/` folder the
+// exe itself is uploaded to by hand — there is no GitHub Releases pipeline in
+// this project, so a build is "published" simply by dragging the new
+// Nebula-Setup.exe *and* the `latest.yml` electron-builder writes next to it
+// (in `release/`) into that folder. Disabled in dev — there is no packaged
+// latest.yml to read the update feed from, and autoUpdater throws immediately
+// if it can't find one.
+//
+// UI lives entirely in the renderer (see UpdateBanner.tsx) rather than native
+// dialogs, so every event just gets forwarded over IPC.
 let manualCheckInFlight = false
+
+function sendToRenderer(channel, payload) {
+  mainWindow?.webContents.send(channel, payload)
+}
 
 function setupAutoUpdater() {
   if (isDev) return
 
-  autoUpdater.autoDownload = true
+  // Downloading only starts once the user clicks the in-app "Baixar agora"
+  // button, not silently in the background the moment an update is found.
+  autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+  // We never upload the .blockmap electron-updater needs for a differential
+  // (delta) download — every release re-uploads the full installer by hand —
+  // so force a full download every time instead of failing/falling back.
+  autoUpdater.disableDifferentialDownload = true
 
   autoUpdater.on('error', (err) => {
     console.error('[autoUpdater]', err)
-    if (manualCheckInFlight) {
-      manualCheckInFlight = false
-      void dialog.showMessageBox(mainWindow, {
-        type: 'error',
-        title: 'Nébula',
-        message: 'Não foi possível verificar atualizações.',
-        detail: err?.message ?? String(err),
-      })
-    }
+    sendToRenderer('update-error', err?.message ?? String(err))
+    manualCheckInFlight = false
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    sendToRenderer('update-available', { version: info.version })
   })
 
   autoUpdater.on('update-not-available', () => {
-    if (manualCheckInFlight) {
-      manualCheckInFlight = false
-      void dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Nébula',
-        message: 'Você já está na versão mais recente.',
-      })
-    }
+    if (manualCheckInFlight) sendToRenderer('update-not-available')
+    manualCheckInFlight = false
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendToRenderer('update-download-progress', { percent: progress.percent })
   })
 
   autoUpdater.on('update-downloaded', (info) => {
     manualCheckInFlight = false
-    void dialog
-      .showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Nébula',
-        message: `Atualização ${info.version} baixada.`,
-        detail: 'Reinicie o app para aplicar a atualização.',
-        buttons: ['Reiniciar agora', 'Mais tarde'],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then(({ response }) => {
-        if (response === 0) {
-          app.isQuitting = true
-          autoUpdater.quitAndInstall()
-        }
-      })
+    sendToRenderer('update-downloaded', { version: info.version })
   })
 
   // Check on launch, then every 4h while the app stays open/minimized in the tray.
@@ -220,16 +217,21 @@ function setupAutoUpdater() {
 
 function checkForUpdatesManually() {
   if (isDev) {
-    void dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'Nébula',
-      message: 'Verificação de atualização não está disponível em modo de desenvolvimento.',
-    })
+    console.log('[autoUpdater] verificação pulada em modo de desenvolvimento')
     return
   }
   manualCheckInFlight = true
+  mainWindow?.show()
+  mainWindow?.focus()
   void autoUpdater.checkForUpdates()
 }
+
+ipcMain.handle('update-download', () => autoUpdater.downloadUpdate())
+ipcMain.handle('update-install', () => {
+  app.isQuitting = true
+  autoUpdater.quitAndInstall()
+})
+ipcMain.handle('update-check', () => checkForUpdatesManually())
 
 function createTray() {
   const icon = nativeImage.createFromPath(trayIconPath)
