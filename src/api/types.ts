@@ -200,6 +200,12 @@ export interface NowPlayingDto {
   startedAtUnixMs: number
 }
 
+export interface MusicResolveResultDto {
+  videoId: string
+  title: string
+  thumbnailUrl: string | null
+}
+
 export interface GifResultDto {
   id: string
   previewUrl: string

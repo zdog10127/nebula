@@ -3,6 +3,7 @@ import { Clapperboard, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { apiGet } from '../api/client'
 import type { GifResultDto, GifSearchResult } from '../api/types'
+import NebulaLoader from './NebulaLoader'
 
 export default function GifPicker({ onSelect }: { onSelect: (url: string) => void }) {
   const [open, setOpen] = useState(false)
@@ -63,7 +64,11 @@ export default function GifPicker({ onSelect }: { onSelect: (url: string) => voi
               />
             </div>
             <div className="grid max-h-72 grid-cols-2 gap-1.5 overflow-y-auto">
-              {isLoading && <p className="col-span-2 py-6 text-center text-xs text-muted-foreground">Carregando...</p>}
+              {isLoading && (
+                <div className="col-span-2 flex justify-center py-6">
+                  <NebulaLoader size={20} />
+                </div>
+              )}
               {!isLoading && hasError && (
                 <p className="col-span-2 py-6 text-center text-xs text-muted-foreground">
                   Busca de GIF indisponível no momento.

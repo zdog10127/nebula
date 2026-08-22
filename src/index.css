@@ -4,7 +4,14 @@
   --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
 
-  /* Surface hierarchy: cool near-black slate, own identity (not Discord grey/blurple) */
+  /* Surface hierarchy: cool near-black slate, own identity (not Discord grey/blurple).
+     This is the "Nébula" preset — also the default/fallback for anyone with no preference
+     saved yet. Every other preset below overrides these same variables under
+     [data-theme-preset] on the root element; every component keeps using the plain
+     `bg-canvas` / `text-foreground` / `bg-accent` utilities and just inherits whichever
+     values are active, no per-component theme-awareness needed. Radius tokens work the same
+     way: .btn/.field/.icon-btn/.card read var(--radius-*) instead of a literal value, so a
+     preset can make the whole app sharper or rounder just by redefining four variables. */
   --color-canvas: #07080b;
   --color-panel: #0d0f15;
   --color-panel-hover: #171a23;
@@ -30,6 +37,120 @@
 
   --shadow-elevated: 0 20px 40px -12px rgb(0 0 0 / 0.55), 0 4px 10px -4px rgb(0 0 0 / 0.4);
   --shadow-pop: 0 10px 24px -6px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.35);
+
+  --radius-btn: 0.6rem;
+  --radius-field: 0.6rem;
+  --radius-icon: 0.55rem;
+  --radius-card: 1rem;
+}
+
+/* =========================================================================================
+   Theme presets — pick one in Configurações de perfil → Aparência. Each bundles a full
+   palette + radius scale (+ font, for Terminal) into one opinionated look, instead of mixing
+   independent light/dark + accent knobs. A custom accent color (picked separately) always
+   wins over whatever a preset sets, since it's applied as an inline style with higher
+   specificity than any of these — see ThemeContext.tsx.
+   ========================================================================================= */
+
+/* ---- Aurora: violet/pink gradient energy, soft rounded shapes -------------------------- */
+:root[data-theme-preset='aurora'] {
+  --color-canvas: #0b0a14;
+  --color-panel: #14121f;
+  --color-panel-hover: #1f1b30;
+  --color-raised: #26213a;
+  --color-border: #322c47;
+  --color-border-strong: #47405f;
+  --color-foreground: #f6f4fb;
+  --color-muted-foreground: #a89fc0;
+  --color-accent: #c084fc;
+  --color-accent-hover: #d8b4fe;
+  --color-accent-active: #a855f7;
+  --color-accent-soft: rgba(192, 132, 252, 0.16);
+  --color-accent-border: rgba(192, 132, 252, 0.4);
+  --radius-btn: 0.9rem;
+  --radius-field: 0.9rem;
+  --radius-icon: 0.8rem;
+  --radius-card: 1.4rem;
+}
+
+/* ---- Terminal: hacker green on near-black, monospace, sharp corners -------------------- */
+:root[data-theme-preset='terminal'] {
+  --color-canvas: #050705;
+  --color-panel: #081108;
+  --color-panel-hover: #0f1c0f;
+  --color-raised: #122712;
+  --color-border: #1c351c;
+  --color-border-strong: #2c4f2c;
+  --color-foreground: #d7ffd9;
+  --color-muted-foreground: #6fae76;
+  --color-accent: #39ff6a;
+  --color-accent-hover: #7dffa0;
+  --color-accent-active: #22c55e;
+  --color-accent-soft: rgba(57, 255, 106, 0.14);
+  --color-accent-border: rgba(57, 255, 106, 0.4);
+  --radius-btn: 0.15rem;
+  --radius-field: 0.15rem;
+  --radius-icon: 0.15rem;
+  --radius-card: 0.25rem;
+  --font-sans: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+
+/* ---- Daylight: warm light mode, amber accent -------------------------------------------- */
+:root[data-theme-preset='daylight'] {
+  --color-canvas: #faf7f2;
+  --color-panel: #ffffff;
+  --color-panel-hover: #f3ede2;
+  --color-raised: #ffffff;
+  --color-border: #ece4d6;
+  --color-border-strong: #d8cbb3;
+  --color-foreground: #241c12;
+  --color-muted-foreground: #7a6b53;
+  --color-accent: #f59e0b;
+  --color-accent-hover: #fbbf24;
+  --color-accent-active: #d97706;
+  --color-accent-soft: rgba(245, 158, 11, 0.14);
+  --color-accent-border: rgba(245, 158, 11, 0.4);
+  --shadow-elevated: 0 20px 40px -12px rgb(36 28 18 / 0.16), 0 4px 10px -4px rgb(36 28 18 / 0.1);
+  --shadow-pop: 0 10px 24px -6px rgb(36 28 18 / 0.14), 0 2px 6px -2px rgb(36 28 18 / 0.1);
+}
+
+/* ---- Sakura: soft light mode, rose accent, extra-rounded ------------------------------- */
+:root[data-theme-preset='sakura'] {
+  --color-canvas: #fdf3f6;
+  --color-panel: #ffffff;
+  --color-panel-hover: #fbe7ee;
+  --color-raised: #ffffff;
+  --color-border: #f6dce6;
+  --color-border-strong: #eab8cd;
+  --color-foreground: #2b1420;
+  --color-muted-foreground: #8a5b6d;
+  --color-accent: #fb7185;
+  --color-accent-hover: #fda4af;
+  --color-accent-active: #f43f5e;
+  --color-accent-soft: rgba(251, 113, 133, 0.14);
+  --color-accent-border: rgba(251, 113, 133, 0.4);
+  --shadow-elevated: 0 20px 40px -12px rgb(43 20 32 / 0.14), 0 4px 10px -4px rgb(43 20 32 / 0.08);
+  --shadow-pop: 0 10px 24px -6px rgb(43 20 32 / 0.12), 0 2px 6px -2px rgb(43 20 32 / 0.08);
+  --radius-btn: 0.9rem;
+  --radius-field: 0.9rem;
+  --radius-icon: 0.8rem;
+  --radius-card: 1.4rem;
+}
+
+/* ---- OLED: true black canvas, minimal, battery-friendly on OLED screens ---------------- */
+:root[data-theme-preset='oled'] {
+  --color-canvas: #000000;
+  --color-panel: #050505;
+  --color-panel-hover: #0e0e0e;
+  --color-raised: #131313;
+  --color-border: #1c1c1c;
+  --color-border-strong: #2a2a2a;
+  --color-foreground: #ffffff;
+  --color-muted-foreground: #999999;
+  --radius-btn: 0.35rem;
+  --radius-field: 0.35rem;
+  --radius-icon: 0.35rem;
+  --radius-card: 0.5rem;
 }
 
 @layer base {
@@ -83,7 +204,7 @@
     color: var(--color-foreground);
   }
 
-  /* Slim, unobtrusive scrollbars matching the dark palette */
+  /* Slim, unobtrusive scrollbars matching the active palette */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border-strong) transparent;
@@ -114,7 +235,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: 0.6rem;
+    border-radius: var(--radius-btn);
     padding: 0.6rem 1rem;
     font-weight: 600;
     font-size: 0.875rem;
@@ -163,7 +284,7 @@
     justify-content: center;
     width: 2.1rem;
     height: 2.1rem;
-    border-radius: 0.55rem;
+    border-radius: var(--radius-icon);
     color: var(--color-muted-foreground);
     cursor: pointer;
     transition: all 150ms ease;
@@ -178,7 +299,7 @@
   .field {
     width: 100%;
     padding: 0.65rem 0.8rem;
-    border-radius: 0.6rem;
+    border-radius: var(--radius-field);
     border: 1px solid var(--color-border-strong);
     background: var(--color-raised);
     color: var(--color-foreground);
@@ -208,7 +329,61 @@
   .card {
     background: var(--color-panel);
     border: 1px solid var(--color-border);
-    border-radius: 1rem;
+    border-radius: var(--radius-card);
     box-shadow: var(--shadow-elevated);
+  }
+}
+
+@layer utilities {
+  /* Ambient drifting blobs used by <ThemeBackdrop> on the login/register screens — gentle,
+     slow, and disabled entirely under prefers-reduced-motion below. */
+  @keyframes blob-drift-1 {
+    0%,
+    100% {
+      transform: translate(-50%, 0) scale(1);
+    }
+    50% {
+      transform: translate(-50%, 30px) scale(1.08);
+    }
+  }
+
+  @keyframes blob-drift-2 {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(25px, -20px) scale(1.05);
+    }
+  }
+
+  @keyframes blob-drift-3 {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(-20px, -25px) scale(1.06);
+    }
+  }
+
+  .animate-blob-drift-1 {
+    animation: blob-drift-1 14s ease-in-out infinite;
+  }
+
+  .animate-blob-drift-2 {
+    animation: blob-drift-2 18s ease-in-out infinite;
+  }
+
+  .animate-blob-drift-3 {
+    animation: blob-drift-3 16s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob-drift-1,
+  .animate-blob-drift-2,
+  .animate-blob-drift-3 {
+    animation: none;
   }
 }

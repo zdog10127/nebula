@@ -140,7 +140,7 @@ export default function DmChatView() {
             ? { name: user?.displayName ?? '', avatarUrl: user?.avatarUrl ?? null }
             : { name: channel?.otherDisplayName ?? '', avatarUrl: channel?.otherAvatarUrl ?? null }
           return (
-            <div key={message.id} className="group flex gap-3 rounded-lg px-2 py-1 -mx-2 hover:bg-panel-hover/60">
+            <div key={message.id} className="group relative flex gap-3 rounded-lg px-2 py-1 -mx-2 hover:bg-panel-hover/60">
               <Avatar url={author.avatarUrl} name={author.name} size={38} className="mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
@@ -169,30 +169,31 @@ export default function DmChatView() {
                   <p className="whitespace-pre-wrap break-words text-[15px] text-foreground/90">{message.content}</p>
                 )}
 
-                {isMine && editingId !== message.id && (
-                  <div className="mt-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      type="button"
-                      className="icon-btn h-7 w-7"
-                      onClick={() => {
-                        setEditingId(message.id)
-                        setEditContent(message.content)
-                      }}
-                      title="Editar"
-                    >
-                      <Pencil size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn h-7 w-7 hover:text-dnd"
-                      onClick={() => setPendingDeleteId(message.id)}
-                      title="Excluir"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {isMine && editingId !== message.id && (
+                <div className="absolute right-2 top-0 z-10 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-border-strong bg-raised p-1 shadow-md group-hover:flex">
+                  <button
+                    type="button"
+                    className="icon-btn h-7 w-7"
+                    onClick={() => {
+                      setEditingId(message.id)
+                      setEditContent(message.content)
+                    }}
+                    title="Editar"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn h-7 w-7 hover:text-dnd"
+                    onClick={() => setPendingDeleteId(message.id)}
+                    title="Excluir"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}

@@ -180,7 +180,7 @@ export default function ChatView({ channelId }: { channelId: string }) {
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
         {messages.map((message) => (
-          <div key={message.id} className="group flex gap-3 rounded-lg px-2 py-1 -mx-2 hover:bg-panel-hover/60">
+          <div key={message.id} className="group relative flex gap-3 rounded-lg px-2 py-1 -mx-2 hover:bg-panel-hover/60">
             <button type="button" onClick={() => openProfile({ userId: message.authorId })} className="shrink-0">
               <Avatar url={message.authorAvatarUrl} name={message.authorDisplayName} size={38} className="mt-0.5" />
             </button>
@@ -241,66 +241,65 @@ export default function ChatView({ channelId }: { channelId: string }) {
                 </div>
               ))}
 
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                {message.reactions.map((r) => {
-                  const reactedByMe = r.userIds.includes(user?.userId ?? '')
-                  return (
-                    <button
-                      key={r.emoji}
-                      type="button"
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
-                        reactedByMe
-                          ? 'border-accent-border bg-accent-soft text-accent'
-                          : 'border-border-strong bg-raised text-muted-foreground hover:border-accent-border'
-                      }`}
-                      onClick={() => void toggleReaction(message, r.emoji)}
-                    >
-                      {r.emoji} {r.userIds.length}
-                    </button>
-                  )
-                })}
-                <span className="opacity-0 transition-opacity group-hover:opacity-100">
-                  <EmojiPicker onSelect={(emoji) => void toggleReaction(message, emoji)} />
-                </span>
-              </div>
-
-              {editingId !== message.id && (
-                <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  {message.isPinned && <Pin size={11} className="mr-1 shrink-0 text-accent" />}
-                  <button
-                    type="button"
-                    className={`icon-btn h-7 w-7 ${message.isPinned ? 'text-accent' : ''}`}
-                    onClick={() => void togglePin(message)}
-                    title={message.isPinned ? 'Desafixar' : 'Fixar mensagem'}
-                  >
-                    {message.isPinned ? <PinOff size={13} /> : <Pin size={13} />}
-                  </button>
-                  {message.authorId === user?.userId && (
-                    <>
+              {message.reactions.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {message.reactions.map((r) => {
+                    const reactedByMe = r.userIds.includes(user?.userId ?? '')
+                    return (
                       <button
+                        key={r.emoji}
                         type="button"
-                        className="icon-btn h-7 w-7"
-                        onClick={() => {
-                          setEditingId(message.id)
-                          setEditContent(message.content)
-                        }}
-                        title="Editar"
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                          reactedByMe
+                            ? 'border-accent-border bg-accent-soft text-accent'
+                            : 'border-border-strong bg-raised text-muted-foreground hover:border-accent-border'
+                        }`}
+                        onClick={() => void toggleReaction(message, r.emoji)}
                       >
-                        <Pencil size={13} />
+                        {r.emoji} {r.userIds.length}
                       </button>
-                      <button
-                        type="button"
-                        className="icon-btn h-7 w-7 hover:text-dnd"
-                        onClick={() => setPendingDeleteId(message.id)}
-                        title="Excluir"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </>
-                  )}
+                    )
+                  })}
                 </div>
               )}
             </div>
+
+            {editingId !== message.id && (
+              <div className="absolute right-2 top-0 z-10 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-border-strong bg-raised p-1 shadow-md group-hover:flex">
+                <EmojiPicker onSelect={(emoji) => void toggleReaction(message, emoji)} />
+                <button
+                  type="button"
+                  className={`icon-btn h-7 w-7 ${message.isPinned ? 'text-accent' : ''}`}
+                  onClick={() => void togglePin(message)}
+                  title={message.isPinned ? 'Desafixar' : 'Fixar mensagem'}
+                >
+                  {message.isPinned ? <PinOff size={13} /> : <Pin size={13} />}
+                </button>
+                {message.authorId === user?.userId && (
+                  <>
+                    <button
+                      type="button"
+                      className="icon-btn h-7 w-7"
+                      onClick={() => {
+                        setEditingId(message.id)
+                        setEditContent(message.content)
+                      }}
+                      title="Editar"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn h-7 w-7 hover:text-dnd"
+                      onClick={() => setPendingDeleteId(message.id)}
+                      title="Excluir"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ))}
         <div ref={bottomRef} />

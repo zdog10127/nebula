@@ -1,5 +1,5 @@
-import { Room, RoomEvent, Track } from 'livekit-client'
-import type { Participant, RemoteParticipant, RemoteTrack, RemoteTrackPublication } from 'livekit-client'
+import { AudioPresets, Room, RoomEvent, Track } from 'livekit-client'
+import type { AudioCaptureOptions, Participant, RemoteParticipant, RemoteTrack, RemoteTrackPublication } from 'livekit-client'
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { apiGet, apiPost } from '../api/client'
@@ -33,6 +33,26 @@ const SCREEN_SHARE_RESOLUTIONS: Record<ScreenShareQuality, { width: number; heig
   '720p': { width: 1280, height: 720 },
   '1080p': { width: 1920, height: 1080 },
   '1440p': { width: 2560, height: 1440 },
+}
+
+// 'googDucking' is a non-standard, Windows-only Chromium constraint (predates the modern
+// Constrainable Properties spec, still honored today). On Windows, opening a microphone
+// stream normally makes Chromium request the OS's "communications" audio device role, which
+// triggers Windows' own automatic ducking — it quietly drops the volume of every other app
+// (Spotify, a game, everything) the moment the mic opens. That's the "áudio do PC inteiro
+// fica abafado ao entrar numa sala" bug: it's not our audio pipeline, it's Windows reacting
+// to how the mic was opened. Setting this to false tells Chromium not to request that role,
+// so Windows has no reason to duck anything. It's a no-op on macOS/Linux. LiveKit passes
+// AudioCaptureOptions straight through to getUserMedia without filtering unknown keys, so
+// this reaches the browser even though it's not part of LiveKit's own typed options.
+function micCaptureOptions(deviceId: string | undefined, noiseSuppression: boolean): AudioCaptureOptions {
+  return {
+    deviceId,
+    noiseSuppression,
+    echoCancellation: true,
+    autoGainControl: true,
+    googDucking: false,
+  } as AudioCaptureOptions & { googDucking: boolean }
 }
 
 interface ScreenShareEntry {
@@ -443,7 +463,12 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
       try {
         const { url, token } = await apiPost<VoiceTokenResult>(`/api/channels/${newChannelId}/voice/token`)
-        const newRoom = new Room()
+        // adaptiveStream: pauses/right-sizes video decoding for tracks that aren't actually
+        // attached to a visible element — cheap and directly helps playback smoothness.
+        // dynacast: lets the publisher's simulcast layers pause when nobody is subscribed at
+        // that quality, freeing up CPU/bandwidth room-wide. Both default to off; there's no
+        // real downside to them for this app.
+        const newRoom = new Room({ adaptiveStream: true, dynacast: true })
 
         newRoom.on(
           RoomEvent.TrackSubscribed,
@@ -538,12 +563,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         }
 
         try {
-          await newRoom.localParticipant.setMicrophoneEnabled(true, {
-            deviceId: audioInputDeviceIdRef.current ?? undefined,
-            noiseSuppression: isNoiseSuppressedRef.current,
-            echoCancellation: true,
-            autoGainControl: true,
-          })
+          await newRoom.localParticipant.setMicrophoneEnabled(
+            true,
+            micCaptureOptions(audioInputDeviceIdRef.current ?? undefined, isNoiseSuppressedRef.current),
+          )
         } catch (micErr) {
           console.warn('Could not enable microphone', micErr)
           setIsMuted(true)
@@ -752,12 +775,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     if (!r || isMuted) return
     try {
       await r.localParticipant.setMicrophoneEnabled(false)
-      await r.localParticipant.setMicrophoneEnabled(true, {
-        deviceId: audioInputDeviceIdRef.current ?? undefined,
-        noiseSuppression: next,
-        echoCancellation: true,
-        autoGainControl: true,
-      })
+      await r.localParticipant.setMicrophoneEnabled(
+        true,
+        micCaptureOptions(audioInputDeviceIdRef.current ?? undefined, next),
+      )
     } catch (err) {
       console.warn('Could not toggle noise suppression', err)
       toast.error('Não foi possível ajustar a redução de ruído.')
@@ -801,13 +822,42 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             // quality and isn't meant for this — it's built for a microphone, not a stream.
             audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
             systemAudio: 'include',
-            contentHint: 'detail',
+            // 'motion' tells the browser's encoder to favor smooth framerate over per-frame
+            // sharpness — screen shares here are mostly watch-parties (games, video), where
+            // stutter is far more noticeable than a bit of extra compression blur. 'detail'
+            // (the previous value) does the opposite trade-off and was making motion-heavy
+            // shares choppier than they needed to be.
+            contentHint: 'motion',
             // frameRate only takes effect bundled with a width/height (that's how
             // getDisplayMedia's constraints work) — "Automática" quality has neither, so the
             // fps choice only applies when a specific resolution is picked (the default).
             ...(resolution ? { resolution: { ...resolution, frameRate: fps } } : {}),
           },
-          { videoEncoding: { maxBitrate: fps > 30 ? 8_000_000 : 6_000_000, maxFramerate: fps }, simulcast: false },
+          {
+            // Screen share tracks read their bitrate/framerate cap from `screenShareEncoding`,
+            // NOT `videoEncoding` (that field is for camera tracks only — LiveKit silently
+            // swaps it out for screen shares). The previous code set `videoEncoding` here,
+            // so this cap was never actually applied: LiveKit fell back to its own default
+            // encoding, which under-provisions bandwidth for fast-motion 60fps content and
+            // reads as the app "ficando lento ou travado" the user reported.
+            screenShareEncoding: { maxBitrate: fps > 30 ? 8_000_000 : 6_000_000, maxFramerate: fps },
+            simulcast: false,
+            // H.264 is hardware-encoded on most machines (Chrome/Windows); the previous
+            // default (VP8) is software-only and adds CPU load on top of whatever the person
+            // is already running (a game, a browser tab) — another source of stutter.
+            videoCodec: 'h264',
+            // Under bandwidth pressure, drop resolution before framerate — a slightly
+            // blurrier stream reads as "fine", a stuttering one reads as "broken".
+            degradationPreference: 'maintain-framerate',
+            // LiveKit's global default audio preset is 'music' — only 48kbps, and not
+            // necessarily stereo. That's fine for a mic, but system/tab audio (game mixes,
+            // videos) has way more going on and 48kbps is exactly what "abafado" (muffled,
+            // like a phone call) sounds like — the encoder is throwing away detail to fit
+            // the bitrate. Bumping to the high-quality stereo preset (128kbps) and forcing
+            // stereo explicitly (rather than leaving it to auto-detection) fixes that.
+            audioPreset: AudioPresets.musicHighQualityStereo,
+            forceStereo: true,
+          },
         )
         if (publication?.videoTrack && !screenShareTracksRef.current.has(publication.trackSid)) {
           // Don't auto-attach the sharer's own preview either — they choose whether to

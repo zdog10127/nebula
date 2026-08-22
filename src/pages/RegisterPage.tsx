@@ -1,9 +1,10 @@
-import { Orbit } from 'lucide-react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import NebulaLogo from '../components/NebulaLogo'
+import ThemeBackdrop from '../components/ThemeBackdrop'
 import { useToast } from '../lib/ToastContext'
 
 export default function RegisterPage() {
@@ -31,13 +32,11 @@ export default function RegisterPage() {
 
   return (
     <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-canvas px-6 py-8">
-      <div className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-accent/15 blur-[120px]" />
+      <ThemeBackdrop />
 
       <form onSubmit={handleSubmit} className="card relative z-10 w-full max-w-sm p-8">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-canvas">
-            <Orbit size={24} />
-          </div>
+          <NebulaLogo size={56} />
           <div>
             <h1 className="text-2xl">Criar conta</h1>
             <p className="mt-1 text-sm text-muted-foreground">Comece a conversar em segundos</p>

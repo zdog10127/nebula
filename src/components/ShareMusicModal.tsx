@@ -1,7 +1,8 @@
+import { Search } from 'lucide-react'
 import { useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { ApiError, apiUpload } from '../api/client'
-import type { AttachmentSummary } from '../api/types'
+import { ApiError, apiGet, apiUpload } from '../api/client'
+import type { AttachmentSummary, MusicResolveResultDto } from '../api/types'
 import { useToast } from '../lib/ToastContext'
 import { useVoiceCall } from '../voice/VoiceCallContext'
 import Modal from './Modal'
@@ -9,16 +10,23 @@ import Modal from './Modal'
 export default function ShareMusicModal({ onClose }: { onClose: () => void }) {
   const call = useVoiceCall()
   const toast = useToast()
-  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [query, setQuery] = useState('')
   const [isSharing, setIsSharing] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
 
-  async function handleYoutubeSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    const trimmed = query.trim()
+    if (!trimmed) return
     setIsSharing(true)
     try {
-      await call.shareNowPlaying('youtube', youtubeUrl.trim())
+      // Works for either a pasted YouTube link or a typed search term — the backend figures
+      // out which one it got and resolves it to a specific video, like a Discord music bot.
+      const resolved = await apiGet<MusicResolveResultDto>(`/api/music/resolve?q=${encodeURIComponent(trimmed)}`)
+      await call.shareNowPlaying('youtube', `https://www.youtube.com/watch?v=${resolved.videoId}`, resolved.title)
       onClose()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Não foi possível encontrar essa música.')
     } finally {
       setIsSharing(false)
     }
@@ -42,19 +50,20 @@ export default function ShareMusicModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Compartilhar música" onClose={onClose}>
       <div className="flex flex-col gap-4">
-        <form onSubmit={handleYoutubeSubmit} className="flex flex-col gap-2">
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-2">
           <label className="label">
-            Link do YouTube
+            Nome da música ou link
             <input
               className="field"
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ex: nome do artista - música, ou cole um link do YouTube"
               required
             />
           </label>
           <button type="submit" className="btn btn-primary" disabled={isSharing}>
-            {isSharing ? 'Compartilhando...' : 'Compartilhar vídeo'}
+            <Search size={15} />
+            {isSharing ? 'Procurando...' : 'Tocar na sala'}
           </button>
         </form>
 

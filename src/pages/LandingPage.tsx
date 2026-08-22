@@ -5,12 +5,13 @@ import {
   Mic,
   Monitor,
   Music,
-  Orbit,
   ShieldCheck,
   Smile,
   Users,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import NebulaLogo from '../components/NebulaLogo'
+import ThemeBackdrop from '../components/ThemeBackdrop'
 
 const FEATURES = [
   {
@@ -56,9 +57,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-20 border-b border-border bg-canvas/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-canvas">
-              <Orbit size={18} />
-            </div>
+            <NebulaLogo size={28} />
             <span className="text-lg font-semibold text-foreground">Nébula</span>
           </div>
           <Link to="/login" className="btn btn-secondary">
@@ -70,7 +69,7 @@ export default function LandingPage() {
 
       <main>
         <section className="relative overflow-hidden px-6 pb-20 pt-20 text-center">
-          <div className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-accent/15 blur-[130px]" />
+          <ThemeBackdrop />
 
           <div className="relative z-10 mx-auto max-w-2xl">
             <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">

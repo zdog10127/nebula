@@ -19,7 +19,12 @@
   "build": {
     "appId": "com.novacode.nebula",
     "productName": "Nébula",
-    "files": ["dist/**/*", "electron/**/*", "build/icon.png", "package.json"],
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
     "directories": {
       "output": "release"
     },
@@ -39,7 +44,10 @@
       "artifactName": "Nebula-Setup.exe"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "build/icon.png",
       "category": "public.app-category.social-networking",
       "hardenedRuntime": true,
@@ -54,7 +62,10 @@
       "sign": false
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "build/icon.png",
       "category": "Network",
       "maintainer": "NovaCode"
@@ -69,6 +80,7 @@
     "livekit-client": "^2.22.0",
     "lucide-react": "^1.33.0",
     "react": "^19.2.8",
+    "react-colorful": "^5.8.0",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
     "tailwindcss": "^4.3.3"

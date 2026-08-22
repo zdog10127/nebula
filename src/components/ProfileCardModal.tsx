@@ -4,6 +4,7 @@ import type { PublicProfileDto, RoleDto } from '../api/types'
 import type { ProfileCardMemberContext } from '../lib/ProfileCardContext'
 import Avatar from './Avatar'
 import Modal from './Modal'
+import NebulaLoader from './NebulaLoader'
 
 interface Props {
   userId: string
@@ -39,7 +40,9 @@ export default function ProfileCardModal({ userId, memberContext, onClose }: Pro
   return (
     <Modal title="Perfil" onClose={onClose}>
       {isLoading || !profile ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">Carregando...</p>
+        <div className="flex justify-center py-6">
+          <NebulaLoader size={24} />
+        </div>
       ) : (
         <div>
           <div
