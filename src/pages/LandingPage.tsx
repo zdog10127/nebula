@@ -142,7 +142,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-border px-6 py-8 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Nébula.
+        © {new Date().getFullYear()} NovaCode.
       </footer>
     </div>
   )

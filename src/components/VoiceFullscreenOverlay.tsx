@@ -8,6 +8,20 @@ export default function VoiceFullscreenOverlay() {
   const call = useVoiceCall()
   if (!call.isFullscreen || !call.channelId) return null
 
+  const hasWatchedShare = call.availableShares.some((s) => call.watchedTrackSids.has(s.trackSid))
+
+  if (hasWatchedShare) {
+    // Immersive video-player mode: VoiceCallStage renders its own full-bleed layout with the
+    // participant list/controls floating over the bottom of the video, so this wrapper just
+    // hands it the entire viewport — no header bar or padding eating into the video, which is
+    // exactly what made fullscreen not actually use the whole screen before.
+    return (
+      <div className="fixed inset-0 z-40 bg-black">
+        <VoiceCallStage fullscreen />
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-canvas">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">

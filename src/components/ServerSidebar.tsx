@@ -1,15 +1,17 @@
-import { Compass, MessageCircle, Plus } from 'lucide-react'
+import { BellOff, Compass, MessageCircle, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useServers } from '../servers/ServersContext'
 import { useSocial } from '../social/SocialContext'
 import CreateServerModal from './CreateServerModal'
 import JoinServerModal from './JoinServerModal'
+import ServerContextMenu from './ServerContextMenu'
 
 export default function ServerSidebar() {
-  const { servers } = useServers()
+  const { servers, isServerMuted } = useServers()
   const { incomingRequestCount } = useSocial()
   const [modal, setModal] = useState<'create' | 'join' | null>(null)
+  const [serverMenu, setServerMenu] = useState<{ x: number; y: number; serverId: string; serverName: string } | null>(null)
 
   return (
     <nav className="flex w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto overflow-x-visible bg-panel py-3">
@@ -42,24 +44,48 @@ export default function ServerSidebar() {
           to={`/app/servers/${server.id}`}
           className="group relative flex h-12 w-12 items-center justify-center text-sm font-semibold"
           title={server.name}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setServerMenu({ x: e.clientX, y: e.clientY, serverId: server.id, serverName: server.name })
+          }}
         >
           {({ isActive }) => (
-            <span
-              className={`flex h-12 w-12 items-center justify-center overflow-hidden transition-all duration-200 ${
-                isActive
-                  ? 'rounded-2xl bg-accent text-canvas shadow-[0_0_0_2px_var(--color-accent-soft)]'
-                  : 'rounded-full bg-raised text-foreground group-hover:rounded-2xl group-hover:bg-accent group-hover:text-canvas'
-              }`}
-            >
-              {server.iconUrl ? (
-                <img src={server.iconUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span>{initials(server.name)}</span>
+            <>
+              <span
+                className={`flex h-12 w-12 items-center justify-center overflow-hidden transition-all duration-200 ${
+                  isActive
+                    ? 'rounded-2xl bg-accent text-canvas shadow-[0_0_0_2px_var(--color-accent-soft)]'
+                    : 'rounded-full bg-raised text-foreground group-hover:rounded-2xl group-hover:bg-accent group-hover:text-canvas'
+                }`}
+              >
+                {server.iconUrl ? (
+                  <img src={server.iconUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span>{initials(server.name)}</span>
+                )}
+              </span>
+              {isServerMuted(server.id) && (
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-panel text-muted-foreground ring-2 ring-panel"
+                  title="Servidor silenciado"
+                >
+                  <BellOff size={11} />
+                </span>
               )}
-            </span>
+            </>
           )}
         </NavLink>
       ))}
+
+      {serverMenu && (
+        <ServerContextMenu
+          x={serverMenu.x}
+          y={serverMenu.y}
+          serverId={serverMenu.serverId}
+          serverName={serverMenu.serverName}
+          onClose={() => setServerMenu(null)}
+        />
+      )}
 
       <div className="my-1 h-px w-8 bg-border" />
 

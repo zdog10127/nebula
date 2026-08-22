@@ -16,11 +16,12 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { NavLink, useParams } from 'react-router-dom'
+import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, apiDelete, apiGet, apiPatch } from '../api/client'
 import type {
   CategoryDto,
   ChannelDto,
+  MemberDto,
   MyPermissionsDto,
   NowPlayingDto,
   ServerDetail,
@@ -30,7 +31,10 @@ import type {
 import { useAuth } from '../auth/AuthContext'
 import { useChatHub } from '../hubs/ChatHubContext'
 import { hasPermission } from '../lib/permissions'
+import { showNotification } from '../lib/notify'
+import { useProfileCard } from '../lib/ProfileCardContext'
 import { useToast } from '../lib/ToastContext'
+import { useServers } from '../servers/ServersContext'
 import type { VoiceCallContextValue } from '../voice/VoiceCallContext'
 import { useVoiceCall } from '../voice/VoiceCallContext'
 import Avatar from './Avatar'
@@ -42,6 +46,7 @@ import ProfileSettingsModal from './ProfileSettingsModal'
 import ServerSettingsModal from './ServerSettingsModal'
 import StatusPicker from './StatusPicker'
 import VoiceControls from './VoiceControls'
+import VoiceParticipantContextMenu from './VoiceParticipantContextMenu'
 
 interface Props {
   server: ServerDetail
@@ -61,7 +66,9 @@ export default function ChannelSidebar({ server, refreshServer }: Props) {
   const { user, logout } = useAuth()
   const connection = useChatHub()
   const call = useVoiceCall()
+  const { isServerMuted } = useServers()
   const toast = useToast()
+  const navigate = useNavigate()
   const { channelId: activeChannelId } = useParams<{ channelId?: string }>()
   const [modal, setModal] = useState<ModalState>(null)
   const [voiceParticipants, setVoiceParticipants] = useState<Record<string, VoiceParticipantDto[]>>({})
@@ -69,6 +76,7 @@ export default function ChannelSidebar({ server, refreshServer }: Props) {
   const [myPermissions, setMyPermissions] = useState<MyPermissionsDto | null>(null)
   const [isDeletingCategory, setIsDeletingCategory] = useState(false)
   const [unreadCounts, setUnreadCounts] = useState<Record<string, UnreadCountDto>>({})
+  const [membersById, setMembersById] = useState<Record<string, MemberDto>>({})
 
   const canManageChannels = hasPermission(myPermissions, 'ManageChannels')
   const canInvite = hasPermission(myPermissions, 'CreateInvite')
@@ -142,27 +150,53 @@ export default function ChannelSidebar({ server, refreshServer }: Props) {
   }, [server.id])
 
   useEffect(() => {
+    let cancelled = false
+    void apiGet<MemberDto[]>(`/api/servers/${server.id}/members`).then((list) => {
+      if (!cancelled) setMembersById(Object.fromEntries(list.map((m) => [m.userId, m])))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [server.id])
+
+  useEffect(() => {
     if (!connection) return
 
     const onUnreadPing = (channelId: string, pingServerId: string, authorId: string, mentionedUserIds: string[]) => {
-      if (pingServerId !== server.id || authorId === user?.userId || channelId === activeChannelId) return
-      setUnreadCounts((prev) => {
-        const existing = prev[channelId]
-        return {
-          ...prev,
-          [channelId]: {
-            count: (existing?.count ?? 0) + 1,
-            hasMention: (existing?.hasMention ?? false) || mentionedUserIds.includes(user?.userId ?? ''),
-          },
-        }
-      })
+      if (pingServerId !== server.id || authorId === user?.userId) return
+      const isActiveChannel = channelId === activeChannelId
+
+      if (!isActiveChannel) {
+        setUnreadCounts((prev) => {
+          const existing = prev[channelId]
+          return {
+            ...prev,
+            [channelId]: {
+              count: (existing?.count ?? 0) + 1,
+              hasMention: (existing?.hasMention ?? false) || mentionedUserIds.includes(user?.userId ?? ''),
+            },
+          }
+        })
+      }
+
+      // Notify whenever the message lands somewhere other than the channel you're
+      // actively looking at, or the app is in the background even if it is that channel —
+      // unless the person silenced this server (right-click the server icon).
+      if ((!isActiveChannel || !document.hasFocus()) && !isServerMuted(server.id)) {
+        const channel = server.channels.find((c) => c.id === channelId)
+        const author = membersById[authorId]
+        showNotification(`${server.name} — #${channel?.name ?? 'canal'}`, {
+          body: author ? `${author.nickname ?? author.displayName} enviou uma mensagem` : 'Nova mensagem',
+          onClick: () => navigate(`/app/servers/${server.id}/channels/${channelId}`),
+        })
+      }
     }
 
     connection.on('UnreadPing', onUnreadPing)
     return () => {
       connection.off('UnreadPing', onUnreadPing)
     }
-  }, [connection, server.id, activeChannelId, user?.userId])
+  }, [connection, server, activeChannelId, user?.userId, membersById, navigate, isServerMuted])
 
   const uncategorized = server.channels.filter((c) => !c.categoryId)
   const uncategorizedText = uncategorized.filter((c) => c.type === 'Text').sort((a, b) => a.position - b.position)
@@ -295,6 +329,8 @@ export default function ChannelSidebar({ server, refreshServer }: Props) {
                   onMoveUp={() => void moveChannel(list, channel, -1)}
                   onMoveDown={() => void moveChannel(list, channel, 1)}
                   onVoiceClick={channel.type === 'Voice' ? () => void call.join(channel.id, channel.name) : undefined}
+                  call={call}
+                  ownUserId={user?.userId}
                 />
               ))}
             </CategoryGroup>
@@ -487,6 +523,10 @@ function ChannelRow({
   ownUserId?: string
 }) {
   const isInThisVoiceChannel = channel.type === 'Voice' && call?.channelId === channel.id
+  const { openProfile } = useProfileCard()
+  const [participantMenu, setParticipantMenu] = useState<{ x: number; y: number; participant: VoiceParticipantDto } | null>(
+    null,
+  )
   return (
     <div className="group/row">
       <div className="flex items-center gap-0.5">
@@ -536,42 +576,48 @@ function ChannelRow({
           )}
           {participants?.map((p) => {
             const isSelf = p.userId === ownUserId
-            const showAudioControls = isInThisVoiceChannel && call && !isSelf
-            const isLocallyMuted = call?.locallyMutedIds.has(p.userId) ?? false
+            // Live speaking state only exists for the LiveKit room we're actually connected
+            // to — there's no way to know who's talking in a voice channel we're not in.
+            const isSpeaking = isInThisVoiceChannel && !!call?.speakingIds.has(p.userId)
             return (
-              <li key={p.userId} className="group/participant flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Avatar url={p.avatarUrl} name={p.displayName} size={18} />
-                <span className="min-w-0 flex-1 truncate">{p.displayName}</span>
-                {p.isDeafened ? (
-                  <VolumeX size={11} className="shrink-0 text-dnd" />
-                ) : p.isMuted ? (
-                  <MicOff size={11} className="shrink-0 text-dnd" />
-                ) : null}
-                {showAudioControls && (
-                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/participant:opacity-100">
-                    <input
-                      type="range"
-                      min={0}
-                      max={200}
-                      value={call.participantVolumes[p.userId] ?? 100}
-                      onChange={(e) => call.setParticipantVolume(p.userId, Number(e.target.value))}
-                      className="h-1 w-10 accent-accent"
-                      title={`Volume de ${p.displayName}`}
-                    />
-                    <button
-                      type="button"
-                      className={`icon-btn h-4 w-4 ${isLocallyMuted ? 'text-dnd' : ''}`}
-                      onClick={() => call.toggleParticipantMute(p.userId)}
-                      title={isLocallyMuted ? `Reativar áudio de ${p.displayName}` : `Silenciar ${p.displayName} (só para você)`}
-                    >
-                      {isLocallyMuted ? <VolumeX size={10} /> : <Volume2 size={10} />}
-                    </button>
-                  </div>
-                )}
+              <li key={p.userId}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-1.5 rounded px-1 -mx-1 py-0.5 text-left text-xs text-muted-foreground hover:bg-panel-hover"
+                  onClick={() => !isSelf && openProfile({ userId: p.userId })}
+                  onContextMenu={(e) => {
+                    if (isSelf) return
+                    e.preventDefault()
+                    setParticipantMenu({ x: e.clientX, y: e.clientY, participant: p })
+                  }}
+                >
+                  <span
+                    className={`flex shrink-0 rounded-full border transition-colors duration-100 ${
+                      isSpeaking ? 'border-online' : 'border-transparent'
+                    }`}
+                  >
+                    <Avatar url={p.avatarUrl} name={p.displayName} size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{p.displayName}</span>
+                  {p.isDeafened ? (
+                    <VolumeX size={11} className="shrink-0 text-dnd" />
+                  ) : p.isMuted ? (
+                    <MicOff size={11} className="shrink-0 text-dnd" />
+                  ) : null}
+                </button>
               </li>
             )
           })}
         </ul>
+      )}
+      {participantMenu && (
+        <VoiceParticipantContextMenu
+          x={participantMenu.x}
+          y={participantMenu.y}
+          participant={participantMenu.participant}
+          canControlAudio={isInThisVoiceChannel}
+          onClose={() => setParticipantMenu(null)}
+        />
       )}
     </div>
   )

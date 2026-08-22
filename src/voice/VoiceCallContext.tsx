@@ -22,15 +22,17 @@ export interface ScreenShareMeta {
   trackSid: string
   identity: string
   name: string
+  isLocal: boolean
 }
 
 export type ScreenShareQuality = 'auto' | '720p' | '1080p' | '1440p'
+export type ScreenShareFps = 30 | 60
 
-const SCREEN_SHARE_RESOLUTIONS: Record<ScreenShareQuality, { width: number; height: number; frameRate: number } | undefined> = {
+const SCREEN_SHARE_RESOLUTIONS: Record<ScreenShareQuality, { width: number; height: number } | undefined> = {
   auto: undefined,
-  '720p': { width: 1280, height: 720, frameRate: 30 },
-  '1080p': { width: 1920, height: 1080, frameRate: 30 },
-  '1440p': { width: 2560, height: 1440, frameRate: 30 },
+  '720p': { width: 1280, height: 720 },
+  '1080p': { width: 1920, height: 1080 },
+  '1440p': { width: 2560, height: 1440 },
 }
 
 interface ScreenShareEntry {
@@ -71,6 +73,7 @@ export interface VoiceCallContextValue {
   availableShares: ScreenShareMeta[]
   watchedTrackSids: Set<string>
   toggleWatchScreenShare: (trackSid: string) => void
+  requestPictureInPicture: (trackSid: string) => void
   // Noise suppression
   isNoiseSuppressed: boolean
   toggleNoiseSuppression: () => Promise<void>
@@ -85,6 +88,8 @@ export interface VoiceCallContextValue {
   // Screen share quality
   screenShareQuality: ScreenShareQuality
   setScreenShareQuality: (quality: ScreenShareQuality) => void
+  screenShareFps: ScreenShareFps
+  setScreenShareFps: (fps: ScreenShareFps) => void
   // Fullscreen
   isFullscreen: boolean
   toggleFullscreen: () => void
@@ -106,7 +111,12 @@ function parseMetadata(raw: string | undefined): ParticipantMetadata {
   }
 }
 
-function screenShareClassName(isLocal: boolean): string {
+function screenShareClassName(isLocal: boolean, fullscreen: boolean): string {
+  if (fullscreen) {
+    // Immersive fullscreen: fill the whole video area instead of being capped at 50vh —
+    // that cap is exactly why fullscreen used to still show a small boxed-in video.
+    return `h-full max-h-full w-full max-w-full object-contain ${isLocal ? 'ring-2 ring-accent' : ''}`
+  }
   return isLocal
     ? 'max-h-[50vh] max-w-full rounded-xl border-2 border-accent'
     : 'max-h-[50vh] max-w-full rounded-xl border border-border'
@@ -129,7 +139,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nowPlaying, setNowPlaying] = useState<NowPlayingDto | null>(null)
-  const [isMusicMuted, setIsMusicMuted] = useState(false)
+  // Starts muted: browsers block unmuted autoplay for anything that isn't a direct result
+  // of a user gesture, and receiving NowPlayingChanged over the wire doesn't count as one.
+  // Without this, only the person who clicked "compartilhar" (if even them) actually hears
+  // it — everyone else gets a silently-blocked player, which read as "a música não funciona".
+  const [isMusicMuted, setIsMusicMuted] = useState(true)
   const [screenShareSources, setScreenShareSources] = useState<ElectronScreenShareSource[] | null>(null)
 
   const [participantVolumes, setParticipantVolumesState] = useState<Record<string, number>>({})
@@ -155,6 +169,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
   const [screenShareQuality, setScreenShareQualityState] = useState<ScreenShareQuality>('1080p')
   const screenShareQualityRef = useRef<ScreenShareQuality>('1080p')
+  // Defaults to 60 — the person sharing can drop to 30 (weaker upload/CPU), but "smooth by
+  // default" is what most people expect when streaming gameplay.
+  const [screenShareFps, setScreenShareFpsState] = useState<ScreenShareFps>(60)
+  const screenShareFpsRef = useRef<ScreenShareFps>(60)
 
   const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -163,8 +181,16 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const audioContainerRef = useRef<HTMLDivElement | null>(null)
   const screenShareContainerRef = useRef<HTMLDivElement | null>(null)
   const screenShareTracksRef = useRef<Map<string, ScreenShareEntry>>(new Map())
+  // Screen-share audio (system/game/tab sound) is a separate LiveKit track from the video,
+  // keyed by its own trackSid but carrying the sharer's identity so it can be attached/
+  // detached in lockstep with whether that person's video is being watched — kept OUT of
+  // the DOM (not just muted) until then, so there's no window where it could play before
+  // React/our mute logic catches up. Regular voice-chat mic audio never goes through this
+  // map; it stays in audioContainerRef immediately, same as before.
+  const screenAudioTracksRef = useRef<Map<string, { identity: string; track: RemoteTrack; el: HTMLAudioElement | null }>>(new Map())
   const isDeafenedRef = useRef(false)
   const locallyMutedRef = useRef<Set<string>>(new Set())
+  const isFullscreenRef = useRef(false)
 
   const applyAudioElementStates = useCallback(() => {
     const container = audioContainerRef.current
@@ -200,18 +226,6 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     watchedIdentitiesRef.current = identities
   }
 
-  function attachScreenShareTrack(key: string, track: Track, isLocal: boolean) {
-    screenShareTracksRef.current.set(key, { track, el: null, isLocal })
-    const container = screenShareContainerRef.current
-    if (!container) return
-    const el = track.attach() as HTMLVideoElement
-    el.className = screenShareClassName(isLocal)
-    if (isLocal) el.muted = true
-    container.appendChild(el)
-    const entry = screenShareTracksRef.current.get(key)
-    if (entry) entry.el = el
-  }
-
   function detachScreenShareTrack(key: string) {
     const entry = screenShareTracksRef.current.get(key)
     if (entry?.el) {
@@ -219,6 +233,38 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       entry.el.remove()
     }
     screenShareTracksRef.current.delete(key)
+  }
+
+  function attachScreenAudioTrack(audioTrackSid: string) {
+    const entry = screenAudioTracksRef.current.get(audioTrackSid)
+    if (!entry || entry.el) return
+    const el = entry.track.attach() as HTMLAudioElement
+    el.dataset.participant = entry.identity
+    el.dataset.source = 'screenAudio'
+    audioContainerRef.current?.appendChild(el)
+    entry.el = el
+    applyAudioElementStates()
+  }
+
+  function detachScreenAudioTrack(audioTrackSid: string) {
+    const entry = screenAudioTracksRef.current.get(audioTrackSid)
+    if (entry?.el) {
+      entry.track.detach(entry.el)
+      entry.el.remove()
+      entry.el = null
+    }
+  }
+
+  // Attaches/detaches every screen-audio track belonging to `identity` to match whether
+  // that person's share is currently watched — called right after toggling a share's
+  // watched state so sound follows video instead of playing on its own.
+  function syncScreenAudioForIdentity(identity: string) {
+    const shouldPlay = watchedIdentitiesRef.current.has(identity)
+    for (const [audioSid, entry] of screenAudioTracksRef.current.entries()) {
+      if (entry.identity !== identity) continue
+      if (shouldPlay) attachScreenAudioTrack(audioSid)
+      else detachScreenAudioTrack(audioSid)
+    }
   }
 
   function updateParticipants(r: Room) {
@@ -248,6 +294,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   }
 
   function resetState() {
+    // Leaving the call closes any floating Picture-in-Picture window too — otherwise the
+    // video gets yanked out from under it below without the browser being told to close it.
+    if (document.pictureInPictureElement) void document.exitPictureInPicture().catch(() => {})
     roomRef.current = null
     channelIdRef.current = null
     setChannelId(null)
@@ -262,6 +311,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     locallyMutedRef.current = new Set()
     setLocallyMutedIds(new Set())
     for (const key of Array.from(screenShareTracksRef.current.keys())) detachScreenShareTrack(key)
+    screenAudioTracksRef.current.clear()
     if (audioContainerRef.current) audioContainerRef.current.innerHTML = ''
     activeSharesRef.current = []
     setActiveSharesState([])
@@ -274,19 +324,72 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const registerScreenShareContainer = useCallback((el: HTMLDivElement | null) => {
     if (!el) {
       screenShareContainerRef.current = null
-      for (const entry of screenShareTracksRef.current.values()) {
-        if (entry.el) {
+      // Every watched share that's actually attached right now and about to lose its
+      // container. Some of these are about to be reclaimed by a container mounting in the
+      // very same commit (e.g. leaving fullscreen just re-shows the embedded stage) — for
+      // those we want the usual reattach below, not Picture-in-Picture. So collect them and
+      // decide a tick later, once we know whether anything re-claimed the share.
+      const orphaned: string[] = []
+      for (const [trackSid, entry] of screenShareTracksRef.current.entries()) {
+        if (!entry.el) continue
+        // Leave a video that's already floating in a real Picture-in-Picture window alone.
+        if (document.pictureInPictureElement === entry.el) continue
+        if (watchedTrackSidsRef.current.has(trackSid)) {
+          orphaned.push(trackSid)
+        } else {
           entry.track.detach(entry.el)
           entry.el.remove()
           entry.el = null
         }
       }
+      if (orphaned.length > 0) {
+        setTimeout(() => {
+          // Something re-attached (embedded stage remounted right after) — never mind.
+          if (screenShareContainerRef.current) return
+          for (const trackSid of orphaned) {
+            const entry = screenShareTracksRef.current.get(trackSid)
+            if (!entry?.el || document.pictureInPictureElement === entry.el) continue
+            if (document.pictureInPictureEnabled) {
+              // Best effort: the click/navigation that unmounted this container is still a
+              // recent user gesture, so this can run without a fresh click on the video
+              // itself — "clicar em algum lugar pra ver mensagem" shouldn't require an
+              // extra click on the floating-window button too.
+              entry.el.requestPictureInPicture().catch(() => {
+                if (entry.el && document.pictureInPictureElement !== entry.el) {
+                  entry.track.detach(entry.el)
+                  entry.el.remove()
+                  entry.el = null
+                }
+              })
+            } else {
+              entry.track.detach(entry.el)
+              entry.el.remove()
+              entry.el = null
+            }
+          }
+        }, 0)
+      }
       return
     }
     screenShareContainerRef.current = el
-    for (const entry of screenShareTracksRef.current.values()) {
+    // Only re-attach shares the user had actually opted into watching — everything else
+    // stays listed as "available" but off-screen until they click "Assistir" again.
+    for (const [trackSid, entry] of screenShareTracksRef.current.entries()) {
+      if (!watchedTrackSidsRef.current.has(trackSid)) continue
+      if (entry.el) {
+        // A live <video> for this share already exists — it can still be sitting in a
+        // container that just got torn down (e.g. going straight from the embedded stage
+        // to fullscreen swaps containers in the same tick, before the "was this orphaned
+        // for real" check above even runs). Re-parent it into the CURRENT container instead
+        // of leaving it stranded off-DOM, which used to render as a plain black fullscreen
+        // with no video at all. Also refresh its class in case fullscreen state changed
+        // since it was last attached (embedded 50vh-capped vs. immersive full-bleed).
+        if (entry.el.parentElement !== el) el.appendChild(entry.el)
+        entry.el.className = screenShareClassName(entry.isLocal, isFullscreenRef.current)
+        continue
+      }
       const attachedEl = entry.track.attach() as HTMLVideoElement
-      attachedEl.className = screenShareClassName(entry.isLocal)
+      attachedEl.className = screenShareClassName(entry.isLocal, isFullscreenRef.current)
       if (entry.isLocal) attachedEl.muted = true
       el.appendChild(attachedEl)
       entry.el = attachedEl
@@ -318,7 +421,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   }, [enterFullscreen, exitFullscreen])
 
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    const handler = () => {
+      const nowFullscreen = !!document.fullscreenElement
+      isFullscreenRef.current = nowFullscreen
+      setIsFullscreen(nowFullscreen)
+    }
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
   }, [])
@@ -343,17 +450,38 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           (track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant) => {
             if (track.kind === Track.Kind.Audio) {
               const isScreenAudio = pub.source === Track.Source.ScreenShareAudio
-              const el = track.attach() as HTMLAudioElement
-              el.dataset.participant = participant.identity
-              el.dataset.source = isScreenAudio ? 'screenAudio' : 'mic'
-              audioContainerRef.current?.appendChild(el)
-              applyAudioElementStates()
+              if (isScreenAudio) {
+                // Don't attach at all until this identity's share is actually being
+                // watched — this is what fixes "escuto a live mesmo sem abrir": the audio
+                // element straight up doesn't exist yet, not just muted.
+                if (!screenAudioTracksRef.current.has(pub.trackSid)) {
+                  screenAudioTracksRef.current.set(pub.trackSid, { identity: participant.identity, track, el: null })
+                  if (watchedIdentitiesRef.current.has(participant.identity)) attachScreenAudioTrack(pub.trackSid)
+                }
+              } else {
+                const el = track.attach() as HTMLAudioElement
+                el.dataset.participant = participant.identity
+                el.dataset.source = 'mic'
+                audioContainerRef.current?.appendChild(el)
+                applyAudioElementStates()
+              }
             } else if (track.kind === Track.Kind.Video && pub.source === Track.Source.ScreenShare) {
-              screenShareTracksRef.current.set(pub.trackSid, { track, el: null, isLocal: false })
-              setActiveShares((prev) => [
-                ...prev,
-                { trackSid: pub.trackSid, identity: participant.identity, name: participant.name || participant.identity },
-              ])
+              // LiveKit can fire TrackSubscribed more than once for the same publication
+              // (reconnects, ICE renegotiation). Registering it again would wipe out an
+              // already-attached entry.el and orphan that <video>, or list the same share
+              // twice — both are exactly the "abre duas transmissões" symptom, so this is
+              // a no-op if we've already seen this trackSid.
+              if (!screenShareTracksRef.current.has(pub.trackSid)) {
+                screenShareTracksRef.current.set(pub.trackSid, { track, el: null, isLocal: false })
+                setActiveShares((prev) =>
+                  prev.some((s) => s.trackSid === pub.trackSid)
+                    ? prev
+                    : [
+                        ...prev,
+                        { trackSid: pub.trackSid, identity: participant.identity, name: participant.name || participant.identity, isLocal: false },
+                      ],
+                )
+              }
             }
           },
         )
@@ -365,6 +493,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
             setWatchedTrackSidsState(new Set(watchedTrackSidsRef.current))
             recomputeWatchedIdentities()
             applyAudioElementStates()
+          } else if (pub.source === Track.Source.ScreenShareAudio) {
+            detachScreenAudioTrack(pub.trackSid)
+            screenAudioTracksRef.current.delete(pub.trackSid)
           } else {
             track.detach().forEach((el) => el.remove())
           }
@@ -373,6 +504,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
           if (publication.source === Track.Source.ScreenShare) {
             detachScreenShareTrack(publication.trackSid)
             setIsSharingScreen(false)
+            setActiveShares((prev) => prev.filter((s) => s.trackSid !== publication.trackSid))
+            watchedTrackSidsRef.current.delete(publication.trackSid)
+            setWatchedTrackSidsState(new Set(watchedTrackSidsRef.current))
+            recomputeWatchedIdentities()
+            applyAudioElementStates()
           }
         })
         newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
@@ -506,11 +642,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     (trackSid: string) => {
       const entry = screenShareTracksRef.current.get(trackSid)
       if (!entry) return
+      const shareMeta = activeSharesRef.current.find((s) => s.trackSid === trackSid)
       const isWatching = watchedTrackSidsRef.current.has(trackSid)
       const nextSids = new Set(watchedTrackSidsRef.current)
       if (isWatching) {
         nextSids.delete(trackSid)
         if (entry.el) {
+          if (document.pictureInPictureElement === entry.el) void document.exitPictureInPicture().catch(() => {})
           entry.track.detach(entry.el)
           entry.el.remove()
           entry.el = null
@@ -518,9 +656,13 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       } else {
         nextSids.add(trackSid)
         const container = screenShareContainerRef.current
-        if (container) {
+        // entry.el already set means it's already attached (e.g. a fast double-click, or
+        // this ran once already) — attaching again would create a second <video> for the
+        // same stream, which is exactly the "abre 2 de uma vez" bug.
+        if (container && !entry.el) {
           const el = entry.track.attach() as HTMLVideoElement
-          el.className = screenShareClassName(false)
+          el.className = screenShareClassName(entry.isLocal, isFullscreenRef.current)
+          if (entry.isLocal) el.muted = true
           container.appendChild(el)
           entry.el = el
         }
@@ -528,9 +670,27 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       watchedTrackSidsRef.current = nextSids
       setWatchedTrackSidsState(nextSids)
       recomputeWatchedIdentities()
+      if (shareMeta) syncScreenAudioForIdentity(shareMeta.identity)
       applyAudioElementStates()
     },
     [applyAudioElementStates],
+  )
+
+  const requestPictureInPicture = useCallback(
+    (trackSid: string) => {
+      const entry = screenShareTracksRef.current.get(trackSid)
+      const el = entry?.el
+      if (!el) return
+      if (!document.pictureInPictureEnabled) {
+        toast.error('Picture-in-Picture não é suportado neste navegador.')
+        return
+      }
+      el.requestPictureInPicture().catch((err) => {
+        console.warn('Could not enter Picture-in-Picture', err)
+        toast.error('Não foi possível abrir a transmissão numa janela flutuante.')
+      })
+    },
+    [toast],
   )
 
   const refreshDevices = useCallback(async () => {
@@ -609,6 +769,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setScreenShareQualityState(quality)
   }, [])
 
+  const setScreenShareFps = useCallback((fps: ScreenShareFps) => {
+    screenShareFpsRef.current = fps
+    setScreenShareFpsState(fps)
+  }, [])
+
   useEffect(() => {
     return window.electronScreenShare?.onSources((sources) => setScreenShareSources(sources))
   }, [])
@@ -624,12 +789,37 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     try {
       if (!isSharingScreen) {
         const resolution = SCREEN_SHARE_RESOLUTIONS[screenShareQualityRef.current]
+        const fps = screenShareFpsRef.current
         const publication = await r.localParticipant.setScreenShareEnabled(
           true,
-          { audio: true, contentHint: 'detail', ...(resolution ? { resolution } : {}) },
-          { videoEncoding: { maxBitrate: 6_000_000, maxFramerate: 30 }, simulcast: false },
+          {
+            // systemAudio: 'include' makes Chrome show/default the "share system audio"
+            // option when the person picks "Entire screen" — without it, sharing the whole
+            // desktop often captures no audio at all. Sharing a specific tab already gets a
+            // "share tab audio" checkbox for free once `audio` is set. Voice-processing
+            // (echo cancellation etc.) is turned off because it degrades music/game audio
+            // quality and isn't meant for this — it's built for a microphone, not a stream.
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+            systemAudio: 'include',
+            contentHint: 'detail',
+            // frameRate only takes effect bundled with a width/height (that's how
+            // getDisplayMedia's constraints work) — "Automática" quality has neither, so the
+            // fps choice only applies when a specific resolution is picked (the default).
+            ...(resolution ? { resolution: { ...resolution, frameRate: fps } } : {}),
+          },
+          { videoEncoding: { maxBitrate: fps > 30 ? 8_000_000 : 6_000_000, maxFramerate: fps }, simulcast: false },
         )
-        if (publication?.videoTrack) attachScreenShareTrack(publication.trackSid, publication.videoTrack, true)
+        if (publication?.videoTrack && !screenShareTracksRef.current.has(publication.trackSid)) {
+          // Don't auto-attach the sharer's own preview either — they choose whether to
+          // watch their own stream through the same "Assistir" control as everyone else.
+          screenShareTracksRef.current.set(publication.trackSid, { track: publication.videoTrack, el: null, isLocal: true })
+          const identity = r.localParticipant.identity
+          setActiveShares((prev) =>
+            prev.some((s) => s.trackSid === publication.trackSid)
+              ? prev
+              : [...prev, { trackSid: publication.trackSid, identity, name: 'Você', isLocal: true }],
+          )
+        }
         setIsSharingScreen(true)
       } else {
         await r.localParticipant.setScreenShareEnabled(false)
@@ -669,7 +859,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     const handler = (changedChannelId: string, dto: NowPlayingDto | null) => {
       if (channelIdRef.current === changedChannelId) {
         setNowPlaying(dto)
-        setIsMusicMuted(false)
+        setIsMusicMuted(true)
       }
     }
     connection.on('NowPlayingChanged', handler)
@@ -720,6 +910,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         availableShares: activeShares,
         watchedTrackSids,
         toggleWatchScreenShare,
+        requestPictureInPicture,
         isNoiseSuppressed,
         toggleNoiseSuppression,
         audioInputDevices,
@@ -731,6 +922,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         setAudioOutputDevice,
         screenShareQuality,
         setScreenShareQuality,
+        screenShareFps,
+        setScreenShareFps,
         isFullscreen,
         toggleFullscreen,
       }}

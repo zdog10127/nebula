@@ -1,9 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { apiDelete, apiGet, apiPost } from '../api/client'
 import type { DmChannelDto, DmMessageDto, FriendDto, FriendRequestDto } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { isHubConnected, useChatHub } from '../hubs/ChatHubContext'
+import { showNotification } from '../lib/notify'
 
 interface SocialContextValue {
   friends: FriendDto[]
@@ -24,9 +26,23 @@ const SocialContext = createContext<SocialContextValue | null>(null)
 export function SocialProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const connection = useChatHub()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [friends, setFriends] = useState<FriendDto[]>([])
   const [friendRequests, setFriendRequests] = useState<FriendRequestDto[]>([])
   const [dmChannels, setDmChannels] = useState<DmChannelDto[]>([])
+
+  // Mirrored in refs so the DmMessageReceived handler (registered once per connection,
+  // see below) always reads the latest values instead of whatever was current when that
+  // effect last re-ran.
+  const dmChannelsRef = useRef<DmChannelDto[]>([])
+  useEffect(() => {
+    dmChannelsRef.current = dmChannels
+  }, [dmChannels])
+  const pathnameRef = useRef(location.pathname)
+  useEffect(() => {
+    pathnameRef.current = location.pathname
+  }, [location.pathname])
 
   const refresh = useCallback(async () => {
     if (!user) return
@@ -65,6 +81,17 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         const next = prev.filter((c) => c.id !== message.dmChannelId)
         return [updated, ...next]
       })
+
+      if (message.authorId === user?.userId) return
+      const dmPath = `/app/dm/${message.dmChannelId}`
+      const isViewingThisDm = pathnameRef.current === dmPath
+      if (!document.hasFocus() || !isViewingThisDm) {
+        const channel = dmChannelsRef.current.find((c) => c.id === message.dmChannelId)
+        showNotification(channel?.otherDisplayName ?? 'Nova mensagem', {
+          body: message.content,
+          onClick: () => navigate(dmPath),
+        })
+      }
     }
 
     connection.on('FriendRequestReceived', onChanged)

@@ -68,6 +68,18 @@ export default function VoiceSettingsModal({ onClose }: { onClose: () => void })
             <option value="1440p">1440p</option>
           </select>
         </label>
+
+        <label className="label">
+          Taxa de quadros ao transmitir a tela
+          <select
+            className="field"
+            value={call.screenShareFps}
+            onChange={(e) => call.setScreenShareFps(Number(e.target.value) as typeof call.screenShareFps)}
+          >
+            <option value={60}>60 FPS (padrão)</option>
+            <option value={30}>30 FPS</option>
+          </select>
+        </label>
       </div>
     </Modal>
   )

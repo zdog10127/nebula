@@ -1,5 +1,5 @@
 import { Orbit } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
@@ -7,12 +7,20 @@ import { useAuth } from '../auth/AuthContext'
 import { useToast } from '../lib/ToastContext'
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, user, isLoading } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // AuthProvider already tries to restore the session from a saved token on mount
+  // (loadProfile). If that resolved to a valid user by the time someone lands here —
+  // clicking "Entrar" with a token still saved, or the Electron build booting straight to
+  // /login — skip the form entirely instead of making them type their password again.
+  useEffect(() => {
+    if (!isLoading && user) navigate('/app', { replace: true })
+  }, [isLoading, user, navigate])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -25,6 +33,14 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // While we're still checking the saved token, or once it turned out to be valid and
+  // we're about to redirect above, don't flash the empty login form in between.
+  if (isLoading || user) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-canvas text-muted-foreground">Carregando...</div>
+    )
   }
 
   return (

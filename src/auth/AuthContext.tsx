@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { apiGet, apiPost } from '../api/client'
+import { ApiError, apiGet, apiPost } from '../api/client'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens, subscribeToTokenChanges } from '../api/tokenStore'
 import type { AuthResult, UserProfile } from '../api/types'
 
@@ -25,11 +25,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
       return
     }
+
+    // On a hard refresh (F5), the very first request to the API can fail for reasons
+    // that have nothing to do with the session being invalid — a cold cross-origin
+    // connection to the API's CloudFront domain, a transient CORS/network hiccup, a
+    // 5xx. Treating every failure here as "logged out" was throwing away a perfectly
+    // good token. Only an actual 401 (meaning even the refresh-token retry inside
+    // apiGet failed) should sign the user out; anything else gets a couple of quick
+    // retries before we give up.
+    const attempt = async (retriesLeft: number): Promise<void> => {
+      try {
+        const profile = await apiGet<UserProfile>('/api/auth/me')
+        setUser(profile)
+      } catch (err) {
+        const isAuthFailure = err instanceof ApiError && err.status === 401
+        if (!isAuthFailure && retriesLeft > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+          return attempt(retriesLeft - 1)
+        }
+        console.warn('Could not load profile', err)
+        setUser(null)
+      }
+    }
+
     try {
-      const profile = await apiGet<UserProfile>('/api/auth/me')
-      setUser(profile)
-    } catch {
-      setUser(null)
+      await attempt(2)
     } finally {
       setIsLoading(false)
     }
