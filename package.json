@@ -1,5 +1,5 @@
 {
-  "name": "nebula",
+  "name": "frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -14,7 +14,10 @@
     "electron:build:mac": "npm run build && electron-builder --mac",
     "electron:build:linux": "npm run build && electron-builder --linux",
     "electron:build:all": "npm run build && electron-builder -mwl",
-    "electron:publish": "npm run build && electron-builder --publish always"
+    "electron:publish": "npm run build && electron-builder --publish always",
+    "release:patch": "npm version patch && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags",
+    "release:major": "npm version major && git push --follow-tags"
   },
   "build": {
     "appId": "com.novacode.nebula",
